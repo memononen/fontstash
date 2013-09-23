@@ -1,15 +1,15 @@
-fontstash
-=========
+Font Stash
+==========
 
 Font stash is light-weight online font texture atlas builder. It uses stb_truetype to render fonts on demand to a texture atlas.
 
 The code is split in two parts, the font atlas and glyph quad generator (fontstash.h), and an example OpenGL backend (glstash.h).
 
-## Example:
+## Example
 ``` C
 	// Create stash and rendering backend.
-	struct fontstash* gl = glstash_create(512, 512, 256);
-	struct glstash* stash = fontstash_create(512, 512, 256, FONTSTASH_ZERO_TOPLEFT);
+	struct fontstash* stash = fontstash_create(512, 512, 256, FONTSTASH_ZERO_TOPLEFT);
+	struct glstash* gl = glstash_create(512, 512, 256);
 
 	// Add font to stash.
 	fontstash_add_font(stash, FONT_NORMAL, "fonts/DroidSerif-Regular.ttf");
@@ -30,4 +30,4 @@ The code is split in two parts, the font atlas and glyph quad generator (fontsta
 ```
 
 ## Links
-Uses stb_truetype (http://nothings.org/) for font rendering.
+Uses stb_truetype http://nothings.org for font rendering.
