@@ -19,14 +19,14 @@
 #define GLSTASH_H
 
 
-struct gl_stash* gl_stash_create(int width, int height, int nquads);
-void gl_stash_draw(struct gl_stash* gl, struct sth_stash* stash);
-void gl_stash_delete(struct gl_stash* gl);
-unsigned int gl_rgba(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+struct glstash* glstash_create(int width, int height, int nquads);
+void glstash_draw(struct glstash* gl, struct fontstash* stash);
+void glstash_delete(struct glstash* gl);
+unsigned int glrgba(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 
 #ifdef GLSTASH_IMPLEMENTATION
 
-struct gl_stash {
+struct glstash {
 	GLuint tex;
 	float* verts;
 	float* tcoords;
@@ -34,9 +34,9 @@ struct gl_stash {
 	int cverts;
 };
 
-struct gl_stash* gl_stash_create(int width, int height, int nquads)
+struct glstash* glstash_create(int width, int height, int nquads)
 {
-	struct gl_stash* gl = (struct gl_stash*)malloc(sizeof(struct gl_stash));
+	struct glstash* gl = (struct glstash*)malloc(sizeof(struct glstash));
 	if (gl == NULL) goto error;
 
 	glGenTextures(1, &gl->tex);
@@ -66,7 +66,7 @@ error:
 	return NULL;
 }
 
-inline int setv(struct gl_stash* gl, int i, float x, float y, float s, float t, unsigned int c)
+inline int _glstash_setv(struct glstash* gl, int i, float x, float y, float s, float t, unsigned int c)
 {
 	gl->verts[i*2+0] = x;
 	gl->verts[i*2+1] = y;
@@ -76,15 +76,15 @@ inline int setv(struct gl_stash* gl, int i, float x, float y, float s, float t, 
 	return i+1;
 }
 
-void gl_stash_draw(struct gl_stash* gl, struct sth_stash* stash)
+void glstash_draw(struct glstash* gl, struct fontstash* stash)
 {
 	unsigned char* tdata;
 	int tw, th, dirtyrect[4];
-	struct sth_quad* quads;
+	struct fontstash_quad* quads;
 	int nquads;
 
 	// Update texture.
-	if (sth_get_texture(stash, &tdata, &tw, &th, dirtyrect))
+	if (fontstash_get_texture(stash, &tdata, &tw, &th, dirtyrect))
 	{
 		if (dirtyrect[0] < dirtyrect[2] && dirtyrect[1] < dirtyrect[3])
 		{
@@ -97,24 +97,24 @@ void gl_stash_draw(struct gl_stash* gl, struct sth_stash* stash)
 			glPixelStorei(GL_UNPACK_SKIP_ROWS, dirtyrect[1]);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, dirtyrect[0], dirtyrect[1], w, h, GL_ALPHA,GL_UNSIGNED_BYTE, tdata); 
 
-			sth_flush_draw(stash, STH_FLUSH_TEXTURE);
+			fontstash_flush_draw(stash, FONTSTASH_FLUSH_TEXTURE);
 		}
 	}
 
 	// Draw quads
-	if (sth_get_quads(stash, &quads, &nquads))
+	if (fontstash_get_quads(stash, &quads, &nquads))
 	{
 		int nv = 0;	
 		for (int i = 0; i < nquads; i++)
 		{
-			struct sth_quad* q = &quads[i];
-			nv = setv(gl, nv, q->x0, q->y0, q->s0, q->t0, q->c);
-			nv = setv(gl, nv, q->x1, q->y0, q->s1, q->t0, q->c);
-			nv = setv(gl, nv, q->x1, q->y1, q->s1, q->t1, q->c);
+			struct fontstash_quad* q = &quads[i];
+			nv = _glstash_setv(gl, nv, q->x0, q->y0, q->s0, q->t0, q->c);
+			nv = _glstash_setv(gl, nv, q->x1, q->y0, q->s1, q->t0, q->c);
+			nv = _glstash_setv(gl, nv, q->x1, q->y1, q->s1, q->t1, q->c);
 
-			nv = setv(gl, nv, q->x0, q->y0, q->s0, q->t0, q->c);
-			nv = setv(gl, nv, q->x1, q->y1, q->s1, q->t1, q->c);
-			nv = setv(gl, nv, q->x0, q->y1, q->s0, q->t1, q->c);
+			nv = _glstash_setv(gl, nv, q->x0, q->y0, q->s0, q->t0, q->c);
+			nv = _glstash_setv(gl, nv, q->x1, q->y1, q->s1, q->t1, q->c);
+			nv = _glstash_setv(gl, nv, q->x0, q->y1, q->s0, q->t1, q->c);
 		}
 
 		glBindTexture(GL_TEXTURE_2D, gl->tex);
@@ -134,12 +134,12 @@ void gl_stash_draw(struct gl_stash* gl, struct sth_stash* stash)
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		glDisableClientState(GL_COLOR_ARRAY);
 
-		sth_flush_draw(stash, STH_FLUSH_QUADS);
+		fontstash_flush_draw(stash, FONTSTASH_FLUSH_QUADS);
 	}
 
 }
 
-void gl_stash_delete(struct gl_stash* gl)
+void glstash_delete(struct glstash* gl)
 {
 	if (gl->tex)
 		glDeleteTextures(1, &gl->tex);
@@ -149,7 +149,7 @@ void gl_stash_delete(struct gl_stash* gl)
 	free(gl);
 }
 
-unsigned int gl_rgba(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+unsigned int glrgba(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
 	return (r) | (g << 8) | (b << 16) | (a << 24);
 }

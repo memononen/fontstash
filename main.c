@@ -21,7 +21,7 @@
 #include <string.h>
 #include <math.h>
 #include <GLFW/glfw3.h>
-#define STH_IMPLEMENTATION
+#define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
 #define GLSTASH_IMPLEMENTATION
 #include "glstash.h"
@@ -46,9 +46,9 @@ int main()
 
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
-	struct sth_stash* stash = NULL;
+	struct fontstash* stash = NULL;
 	float t = 0.0f;
-	struct gl_stash* gl = NULL;
+	struct glstash* gl = NULL;
 
 	if (!glfwInit())
 		return -1;
@@ -63,33 +63,33 @@ int main()
 
 	glfwMakeContextCurrent(window);
 
-	gl = gl_stash_create(512, 512, 256);
+	gl = glstash_create(512, 512, 256);
 
 
-	stash = sth_create(512, 512, 256, STH_ZERO_TOPLEFT);
+	stash = fontstash_create(512, 512, 256, FONTSTASH_ZERO_TOPLEFT);
 	if (!stash)
 	{
 		printf("Could not create stash.\n");
 		return -1;
 	}
 
-	if (!sth_add_font(stash, FONT_NORMAL, "fonts/DroidSerif-Regular.ttf"))
+	if (!fontstash_add_font(stash, FONT_NORMAL, "fonts/DroidSerif-Regular.ttf"))
 	{
 		printf("Could not add font.\n");
 		return -1;
 	}
 
-	if (!sth_add_font(stash, FONT_ITALIC, "fonts/DroidSerif-Italic.ttf"))
+	if (!fontstash_add_font(stash, FONT_ITALIC, "fonts/DroidSerif-Italic.ttf"))
 	{
 		printf("Could not add font.\n");
 		return -1;
 	}	
-	if (!sth_add_font(stash, FONT_BOLD, "fonts/DroidSerif-Bold.ttf"))
+	if (!fontstash_add_font(stash, FONT_BOLD, "fonts/DroidSerif-Bold.ttf"))
 	{
 		printf("Could not add font.\n");
 		return -1;
 	}	
-	if (!sth_add_font(stash, FONT_JAPANESE, "fonts/DroidSansJapanese.ttf"))
+	if (!fontstash_add_font(stash, FONT_JAPANESE, "fonts/DroidSansJapanese.ttf"))
 	{
 		printf("Could not add font.\n");
 		return -1;
@@ -120,16 +120,16 @@ int main()
 		glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
 		glBegin(GL_LINES);
-		glColor4ub(255,255,255,255);
+		glColor4ub(0,0,0,128);
 		glVertex2f(0,0);
 		glVertex2f(width,height);
 		glEnd();
 
 		t = glfwGetTime();
 
-		unsigned int white = gl_rgba(255,255,255,255);
-		unsigned int brown = gl_rgba(192,128,0,128);
-		unsigned int blue = gl_rgba(0,192,255,255);
+		unsigned int white = glrgba(255,255,255,255);
+		unsigned int brown = glrgba(192,128,0,128);
+		unsigned int blue = glrgba(0,192,255,255);
 
 		sx = 100; sy = 100;
 		
@@ -137,50 +137,50 @@ int main()
 
 		dash(dx,dy);
 
-		struct sth_style styleBig = { FONT_NORMAL, 124.0f, white };
-		struct sth_style styleBrown = { FONT_ITALIC, 48.0f, brown };
-		struct sth_style styleN24 = { FONT_NORMAL, 24.0f, white };
-		struct sth_style styleI24 = { FONT_ITALIC, 24.0f, white };
-		struct sth_style styleB24 = { FONT_BOLD, 24.0f, white };
-		struct sth_style styleN12Blue = { FONT_NORMAL, 12.0f, blue };
-		struct sth_style styleI18 = { FONT_ITALIC, 18.0f, white };
-		struct sth_style styleJp = { FONT_JAPANESE, 18.0f, white };
+		struct fontstash_style styleBig = { FONT_NORMAL, 124.0f, white };
+		struct fontstash_style styleBrown = { FONT_ITALIC, 48.0f, brown };
+		struct fontstash_style styleN24 = { FONT_NORMAL, 24.0f, white };
+		struct fontstash_style styleI24 = { FONT_ITALIC, 24.0f, white };
+		struct fontstash_style styleB24 = { FONT_BOLD, 24.0f, white };
+		struct fontstash_style styleN12Blue = { FONT_NORMAL, 12.0f, blue };
+		struct fontstash_style styleI18 = { FONT_ITALIC, 18.0f, white };
+		struct fontstash_style styleJp = { FONT_JAPANESE, 18.0f, white };
 
-		sth_vert_metrics(stash, styleBig, NULL, NULL, &lh);
+		fontstash_vert_metrics(stash, styleBig, NULL, NULL, &lh);
 		dx = sx;
 		dy += lh;
 		dash(dx,dy);
-		sth_draw_text(stash, styleBig, dx,dy,"The quick ",&dx);
-		sth_draw_text(stash, styleBrown, dx,dy,"brown ",&dx);
-		sth_draw_text(stash, styleN24, dx,dy,"fox ",&dx);
+		fontstash_draw_text(stash, styleBig, dx,dy,"The quick ",&dx);
+		fontstash_draw_text(stash, styleBrown, dx,dy,"brown ",&dx);
+		fontstash_draw_text(stash, styleN24, dx,dy,"fox ",&dx);
 
-		sth_vert_metrics(stash, styleN24, NULL, NULL, &lh);
+		fontstash_vert_metrics(stash, styleN24, NULL, NULL, &lh);
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
-		sth_draw_text(stash, styleI24, dx,dy,"jumps over ",&dx);
-		sth_draw_text(stash, styleB24, dx,dy,"the lazy ",&dx);
-		sth_draw_text(stash, styleN24, dx,dy,"dog.",&dx);
+		fontstash_draw_text(stash, styleI24, dx,dy,"jumps over ",&dx);
+		fontstash_draw_text(stash, styleB24, dx,dy,"the lazy ",&dx);
+		fontstash_draw_text(stash, styleN24, dx,dy,"dog.",&dx);
 
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
-		sth_draw_text(stash, styleN12Blue, dx,dy,"Now is the time for all good men to come to the aid of the party.",&dx);
+		fontstash_draw_text(stash, styleN12Blue, dx,dy,"Now is the time for all good men to come to the aid of the party.",&dx);
 
-		sth_vert_metrics(stash, styleN12Blue, NULL,NULL,&lh);
+		fontstash_vert_metrics(stash, styleN12Blue, NULL,NULL,&lh);
 		dx = sx;
 		dy += lh*1.2f*2;
 		dash(dx,dy);
-		sth_draw_text(stash, styleI18, dx,dy,"Ég get etið gler án þess að meiða mig.",&dx);
+		fontstash_draw_text(stash, styleI18, dx,dy,"Ég get etið gler án þess að meiða mig.",&dx);
 
-		sth_vert_metrics(stash, styleI18, NULL,NULL,&lh);
+		fontstash_vert_metrics(stash, styleI18, NULL,NULL,&lh);
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
-		sth_draw_text(stash, styleJp, dx,dy,"私はガラスを食べられます。それは私を傷つけません。",&dx);
+		fontstash_draw_text(stash, styleJp, dx,dy,"私はガラスを食べられます。それは私を傷つけません。",&dx);
 
 
-		gl_stash_draw(gl, stash);
+		glstash_draw(gl, stash);
 
 		
 		glEnable(GL_DEPTH_TEST);
@@ -189,8 +189,8 @@ int main()
 		glfwPollEvents();
 	}
 
-	gl_stash_delete(gl);
-	sth_delete(stash);
+	glstash_delete(gl);
+	fontstash_delete(stash);
 
 	glfwTerminate();
 	return 0;

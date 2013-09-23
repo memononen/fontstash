@@ -19,93 +19,93 @@
 #ifndef FONTSTASH_H
 #define FONTSTASH_H
 
-struct sth_style {
+struct fontstash_style {
 	int font;
 	float size;
 	unsigned int color;
 	int align;
 };
 
-struct sth_quad
+struct fontstash_quad
 {
 	float x0,y0,s0,t0;
 	float x1,y1,s1,t1;
 	unsigned int c;
 };
 
-enum sth_stash_flags {
-	STH_ZERO_TOPLEFT = 1,
-	STH_ZERO_BOTTOMLEFT = 2,
+enum fontstash_stash_flags {
+	FONTSTASH_ZERO_TOPLEFT = 1,
+	FONTSTASH_ZERO_BOTTOMLEFT = 2,
 };
 
-enum sth_flush_flags {
-	STH_FLUSH_QUADS = 2,
-	STH_FLUSH_TEXTURE = 4,
+enum fontstash_flush_flags {
+	FONTSTASH_FLUSH_QUADS = 2,
+	FONTSTASH_FLUSH_TEXTURE = 4,
 };
 
 
-struct sth_stash* sth_create(int cachew, int cacheh, int maxquads, unsigned int flags);
+struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, unsigned int flags);
 
-int sth_add_font(struct sth_stash*, int idx, const char* path);
+int fontstash_add_font(struct fontstash*, int idx, const char* path);
 
-int sth_add_font_mem(struct sth_stash*, int idx, unsigned char* data, int ndata);
+int fontstash_add_font_mem(struct fontstash*, int idx, unsigned char* data, int ndata);
 
-void sth_draw_text(struct sth_stash* stash,
-				   struct sth_style style,
+void fontstash_draw_text(struct fontstash* stash,
+				   struct fontstash_style style,
 				   float x, float y, const char* string, float* dx);
 
-void sth_draw_text_buf(struct sth_stash* stash,
-					   struct sth_style style,
+void fontstash_draw_text_buf(struct fontstash* stash,
+					   struct fontstash_style style,
 					   float x, float y, const char* string,
-					   sth_quad* quads, int maxquads, int* nquads, float* dx);
+					   fontstash_quad* quads, int maxquads, int* nquads, float* dx);
 
-void sth_text_bounds(struct sth_stash* stash,
-					 struct sth_style style,
+void fontstash_text_bounds(struct fontstash* stash,
+					 struct fontstash_style style,
 					 const char* string, float* minx, float* miny, float* maxx, float* maxy);
 
-void sth_vert_metrics(struct sth_stash* stash,
-					  struct sth_style style,
+void fontstash_vert_metrics(struct fontstash* stash,
+					  struct fontstash_style style,
 					  float* ascender, float* descender, float* lineh);
 
-int sth_get_quads(struct sth_stash* stash, struct sth_quad** quads, int* nquads);
-int sth_get_texture(struct sth_stash* stash, unsigned char** tdata, int* tw, int* th, int* dirty);
+int fontstash_get_quads(struct fontstash* stash, struct fontstash_quad** quads, int* nquads);
+int fontstash_get_texture(struct fontstash* stash, unsigned char** tdata, int* tw, int* th, int* dirty);
 
-void sth_flush_draw(struct sth_stash* stash, int flags);
+void fontstash_flush_draw(struct fontstash* stash, int flags);
 
-void sth_delete(struct sth_stash* stash);
+void fontstash_delete(struct fontstash* stash);
 
 
-#ifdef STH_IMPLEMENTATION
+#ifdef FONTSTASH_IMPLEMENTATION
 
-#include <stdio.h>
+/*#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "fontstash.h"
+#include "fontstash.h"*/
 
 #define STB_TRUETYPE_IMPLEMENTATION
-static void* tmpalloc(size_t size, void* up);
-static void tmpfree(void* ptr, void* up);
-#define STBTT_malloc(x,u)    tmpalloc(x,u)
-#define STBTT_free(x,u)      tmpfree(x,u)
+static void* _fontstash_tmpalloc(size_t size, void* up);
+static void _fontstash_tmpfree(void* ptr, void* up);
+#define STBTT_malloc(x,u)    _fontstash_tmpalloc(x,u)
+#define STBTT_free(x,u)      _fontstash_tmpfree(x,u)
 #include "stb_truetype.h"
 
-#ifndef STH_SCRATCH_BUF_SIZE
-#	define STH_SCRATCH_BUF_SIZE 16000
+#ifndef FONTSTASH_SCRATCH_BUF_SIZE
+#	define FONTSTASH_SCRATCH_BUF_SIZE 16000
 #endif
-#ifndef STH_HASH_LUT_SIZE
-#	define STH_HASH_LUT_SIZE 256
+#ifndef FONTSTASH_HASH_LUT_SIZE
+#	define FONTSTASH_HASH_LUT_SIZE 256
 #endif
-#ifndef STH_MAX_ROWS
-#	define STH_MAX_ROWS 128
+#ifndef FONTSTASH_MAX_ROWS
+#	define FONTSTASH_MAX_ROWS 128
 #endif
-#ifndef STH_MAX_FONTS
-#	define STH_MAX_FONTS 4
+#ifndef FONTSTASH_MAX_FONTS
+#	define FONTSTASH_MAX_FONTS 4
 #endif
-#ifndef STH_MAX_GLYPHS
-#	define STH_MAX_GLYPHS 1024
+#ifndef FONTSTASH_MAX_GLYPHS
+#	define FONTSTASH_MAX_GLYPHS 1024
 #endif
 
-static unsigned int sth_hashint(unsigned int a)
+static unsigned int _fontstash_hashint(unsigned int a)
 {
 	a += ~(a<<15);
 	a ^=  (a>>10);
@@ -116,31 +116,31 @@ static unsigned int sth_hashint(unsigned int a)
 	return a;
 }
 
-static int sth_mini(int a, int b)
+static int _fontstash_mini(int a, int b)
 {
 	return a < b ? a : b;
 }
 
-static int sth_maxi(int a, int b)
+static int _fontstash_maxi(int a, int b)
 {
 	return a > b ? a : b;
 }
 
-struct sth_row
+struct fontstash_row
 {
-	short x,y,h;	
+	short x,y,h;
 };
 
-struct sth_glyph
+struct fontstash_glyph
 {
 	unsigned int codepoint;
-	short size;
-	int x0,y0,x1,y1;
-	float xadv,xoff,yoff;
 	int next;
+	short size;
+	short x0,y0,x1,y1;
+	short xadv,xoff,yoff;
 };
 
-struct sth_font
+struct fontstash_font
 {
 	stbtt_fontinfo font;
 	unsigned char* data;
@@ -149,38 +149,38 @@ struct sth_font
 	float ascender;
 	float descender;
 	float lineh;
-	struct sth_glyph glyphs[STH_MAX_GLYPHS];
-	int lut[STH_HASH_LUT_SIZE];
+	struct fontstash_glyph glyphs[FONTSTASH_MAX_GLYPHS];
+	int lut[FONTSTASH_HASH_LUT_SIZE];
 };
 
-struct sth_stash
+struct fontstash
 {
 	int tw,th;
 	float itw,ith;
 	unsigned char* tdata;
 	int dirtyrect[4];
-	struct sth_row rows[STH_MAX_ROWS];
+	struct fontstash_row rows[FONTSTASH_MAX_ROWS];
 	int nrows;
-	struct sth_font fonts[STH_MAX_FONTS];
-	struct sth_quad* quads;
+	struct fontstash_font fonts[FONTSTASH_MAX_FONTS];
+	struct fontstash_quad* quads;
 	int cquads;
 	int nquads;
-	unsigned char scratch[STH_SCRATCH_BUF_SIZE];
+	unsigned char scratch[FONTSTASH_SCRATCH_BUF_SIZE];
 	int nscratch;
 	unsigned int flags;
 };
 
-static void* tmpalloc(size_t size, void* up)
+static void* _fontstash_tmpalloc(size_t size, void* up)
 {
-	struct sth_stash* stash = (struct sth_stash*)up;
-	if (stash->nscratch+(int)size > STH_SCRATCH_BUF_SIZE)
+	struct fontstash* stash = (struct fontstash*)up;
+	if (stash->nscratch+(int)size > FONTSTASH_SCRATCH_BUF_SIZE)
 		return NULL;
 	unsigned char* ptr = stash->scratch + stash->nscratch;
 	stash->nscratch += (int)size;
 	return ptr;
 }
 	
-static void tmpfree(void* ptr, void* up)
+static void _fontstash_tmpfree(void* ptr, void* up)
 {
 	// empty
 }		
@@ -190,49 +190,49 @@ static void tmpfree(void* ptr, void* up)
 // Copyright (c) 2008-2009 Bjoern Hoehrmann <bjoern@hoehrmann.de>
 // See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
 
-#define UTF8_ACCEPT 0
-#define UTF8_REJECT 1
+#define FONTSTASH_UTF8_ACCEPT 0
+#define FONTSTASH_UTF8_REJECT 1
 
-static const unsigned char utf8d[] = {
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 00..1f
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 20..3f
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 40..5f
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 60..7f
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9, // 80..9f
-	7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, // a0..bf
-	8,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // c0..df
-	0xa,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x4,0x3,0x3, // e0..ef
-	0xb,0x6,0x6,0x6,0x5,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8, // f0..ff
-	0x0,0x1,0x2,0x3,0x5,0x8,0x7,0x1,0x1,0x1,0x4,0x6,0x1,0x1,0x1,0x1, // s0..s0
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,1, // s1..s2
-	1,2,1,1,1,1,1,2,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1, // s3..s4
-	1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1,3,1,1,1,1,1,1, // s5..s6
-	1,3,1,1,1,1,1,3,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // s7..s8
-};
-
-static unsigned int decutf8(unsigned int* state, unsigned int* codep, unsigned int byte)
+static unsigned int _fontstash_decutf8(unsigned int* state, unsigned int* codep, unsigned int byte)
 {
+	static const unsigned char utf8d[] = {
+		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 00..1f
+		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 20..3f
+		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 40..5f
+		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 60..7f
+		1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9, // 80..9f
+		7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, // a0..bf
+		8,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // c0..df
+		0xa,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x4,0x3,0x3, // e0..ef
+		0xb,0x6,0x6,0x6,0x5,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8, // f0..ff
+		0x0,0x1,0x2,0x3,0x5,0x8,0x7,0x1,0x1,0x1,0x4,0x6,0x1,0x1,0x1,0x1, // s0..s0
+		1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,1, // s1..s2
+		1,2,1,1,1,1,1,2,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1, // s3..s4
+		1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1,3,1,1,1,1,1,1, // s5..s6
+		1,3,1,1,1,1,1,3,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // s7..s8
+	};
+
 	unsigned int type = utf8d[byte];
-	*codep = (*state != UTF8_ACCEPT) ? (byte & 0x3fu) | (*codep << 6) : (0xff >> type) & (byte);
+	*codep = (*state != FONTSTASH_UTF8_ACCEPT) ? (byte & 0x3fu) | (*codep << 6) : (0xff >> type) & (byte);
 	*state = utf8d[256 + *state*16 + type];
 	return *state;
 }
 
 
 
-struct sth_stash* sth_create(int cachew, int cacheh, int maxquads, unsigned int flags)
+struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, unsigned int flags)
 {
-	struct sth_stash* stash;
+	struct fontstash* stash;
 
 	// Allocate memory for the font stash.
-	stash = (struct sth_stash*)malloc(sizeof(struct sth_stash));
+	stash = (struct fontstash*)malloc(sizeof(struct fontstash));
 	if (stash == NULL) goto error;
-	memset(stash, 0, sizeof(struct sth_stash));
+	memset(stash, 0, sizeof(struct fontstash));
 
 	// Allocate space for quad rendering.
-	stash->quads = (struct sth_quad *)malloc(sizeof(sth_quad) * maxquads);
+	stash->quads = (struct fontstash_quad *)malloc(sizeof(fontstash_quad) * maxquads);
 	if (stash->quads == NULL) goto error;
-	memset(stash->quads, 0, sizeof(sth_quad) * maxquads);
+	memset(stash->quads, 0, sizeof(fontstash_quad) * maxquads);
 	stash->cquads = maxquads;
 	stash->nquads = 0;
 
@@ -265,7 +265,7 @@ error:
 	return NULL;
 }
 
-int sth_add_font(struct sth_stash* stash, int idx, const char* path)
+int fontstash_add_font(struct fontstash* stash, int idx, const char* path)
 {
 	FILE* fp = 0;
 	int datasize = 0;
@@ -283,7 +283,7 @@ int sth_add_font(struct sth_stash* stash, int idx, const char* path)
 	fclose(fp);
 	fp = 0;
 
-	if (!sth_add_font_mem(stash, idx, data, datasize)) goto error;
+	if (!fontstash_add_font_mem(stash, idx, data, datasize)) goto error;
 
 	return 1;
 
@@ -293,20 +293,20 @@ error:
 	return 0;
 }
 
-int sth_add_font_mem(struct sth_stash* stash, int idx, unsigned char* data, int datasize)
+int fontstash_add_font_mem(struct fontstash* stash, int idx, unsigned char* data, int datasize)
 {
 	int i, ascent, descent, fh, lineGap;
-	struct sth_font* fnt;
+	struct fontstash_font* fnt;
 	
-	if (idx < 0 || idx >= STH_MAX_FONTS) return 0;
+	if (idx < 0 || idx >= FONTSTASH_MAX_FONTS) return 0;
 	
 	fnt = &stash->fonts[idx];
 	if (fnt->data)
 		free(fnt->data);
-	memset(fnt,0,sizeof(struct sth_font));
+	memset(fnt,0,sizeof(struct fontstash_font));
 	
 	// Init hash lookup.
-	for (i = 0; i < STH_HASH_LUT_SIZE; ++i) fnt->lut[i] = -1;
+	for (i = 0; i < FONTSTASH_HASH_LUT_SIZE; ++i) fnt->lut[i] = -1;
 	
 	// Read in the font data.
 	fnt->datasize = datasize;
@@ -328,25 +328,25 @@ int sth_add_font_mem(struct sth_stash* stash, int idx, unsigned char* data, int 
 	return 1;
 	
 error:
-	memset(fnt,0,sizeof(struct sth_font));
+	memset(fnt,0,sizeof(struct fontstash_font));
 	return 0;
 }
 
-static struct sth_glyph* get_glyph(struct sth_stash* stash, struct sth_font* fnt, unsigned int codepoint, short isize)
+static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, struct fontstash_font* fnt, unsigned int codepoint, short isize)
 {
 	int i,g,advance,lsb,x0,y0,x1,y1,gw,gh;
 	float scale;
-	struct sth_glyph* glyph;
+	struct fontstash_glyph* glyph;
 	unsigned int h;
 	float size = isize/10.0f;
 	int rh;
-	struct sth_row* br;
+	struct fontstash_row* br;
 	
 	// Reset allocator.
 	stash->nscratch = 0;
 
 	// Find code point and size.
-	h = sth_hashint(codepoint) & (STH_HASH_LUT_SIZE-1);
+	h = _fontstash_hashint(codepoint) & (FONTSTASH_HASH_LUT_SIZE-1);
 	i = fnt->lut[h];
 	while (i != -1)
 	{
@@ -356,7 +356,7 @@ static struct sth_glyph* get_glyph(struct sth_stash* stash, struct sth_font* fnt
 	}
 
 	// Could not find glyph, create it.
-	if (fnt->nglyphs >= STH_MAX_GLYPHS)
+	if (fnt->nglyphs >= FONTSTASH_MAX_GLYPHS)
 		return 0;
 	
 	scale = stbtt_ScaleForPixelHeight(&fnt->font, size);
@@ -388,7 +388,7 @@ static struct sth_glyph* get_glyph(struct sth_stash* stash, struct sth_font* fnt
 				return 0;
 		}
 		// Init and add row
-		if (stash->nrows >= STH_MAX_ROWS)
+		if (stash->nrows >= FONTSTASH_MAX_ROWS)
 			return 0;
 		br = &stash->rows[stash->nrows];
 		br->x = 0;
@@ -402,16 +402,16 @@ static struct sth_glyph* get_glyph(struct sth_stash* stash, struct sth_font* fnt
 
 	// Init glyph.
 	glyph = &fnt->glyphs[fnt->nglyphs-1];
-	memset(glyph, 0, sizeof(struct sth_glyph));
+	memset(glyph, 0, sizeof(struct fontstash_glyph));
 	glyph->codepoint = codepoint;
 	glyph->size = isize;
 	glyph->x0 = br->x;
 	glyph->y0 = br->y;
 	glyph->x1 = glyph->x0+gw;
 	glyph->y1 = glyph->y0+gh;
-	glyph->xadv = scale * advance;
-	glyph->xoff = (float)x0;
-	glyph->yoff = (float)y0;
+	glyph->xadv = (short)(scale * advance * 10.0f);
+	glyph->xoff = x0;
+	glyph->yoff = y0;
 	glyph->next = 0;
 
 	// Advance row location.
@@ -425,17 +425,17 @@ static struct sth_glyph* get_glyph(struct sth_stash* stash, struct sth_font* fnt
 	unsigned char* dst = &stash->tdata[glyph->x0 + glyph->y0 * stash->tw];
 	stbtt_MakeGlyphBitmap(&fnt->font, dst, gw,gh, stash->tw, scale,scale, g);
 
-	stash->dirtyrect[0] = sth_mini(stash->dirtyrect[0], glyph->x0);
-	stash->dirtyrect[1] = sth_mini(stash->dirtyrect[1], glyph->y0);
-	stash->dirtyrect[2] = sth_maxi(stash->dirtyrect[2], glyph->x1);
-	stash->dirtyrect[3] = sth_maxi(stash->dirtyrect[3], glyph->y1);
+	stash->dirtyrect[0] = _fontstash_mini(stash->dirtyrect[0], glyph->x0);
+	stash->dirtyrect[1] = _fontstash_mini(stash->dirtyrect[1], glyph->y0);
+	stash->dirtyrect[2] = _fontstash_maxi(stash->dirtyrect[2], glyph->x1);
+	stash->dirtyrect[3] = _fontstash_maxi(stash->dirtyrect[3], glyph->y1);
 
 	return glyph;
 }
 
-static void get_quad(struct sth_stash* stash, struct sth_font* fnt,
-					 struct sth_glyph* prevglyph, struct sth_glyph* glyph,
-					 float scale, float* x, float* y, struct sth_quad* q)
+static void _fontstash_get_quad(struct fontstash* stash, struct fontstash_font* fnt,
+					 struct fontstash_glyph* prevglyph, struct fontstash_glyph* glyph,
+					 float scale, float* x, float* y, struct fontstash_quad* q)
 {
 	int rx,ry;
 	if (prevglyph)
@@ -444,7 +444,7 @@ static void get_quad(struct sth_stash* stash, struct sth_font* fnt,
 		*x += adv;
 	}
 	
-	if (stash->flags & STH_ZERO_TOPLEFT)
+	if (stash->flags & FONTSTASH_ZERO_TOPLEFT)
 	{
 		rx = (int)(*x + glyph->xoff);
 		ry = (int)(*y + glyph->yoff);
@@ -475,36 +475,36 @@ static void get_quad(struct sth_stash* stash, struct sth_font* fnt,
 		q->t1 = (glyph->y1) * stash->ith;
 	}
 
-	*x += glyph->xadv;
+	*x += glyph->xadv / 10.0f;
 }
 
-void sth_draw_text(struct sth_stash* stash,
-				   struct sth_style style,
+void fontstash_draw_text(struct fontstash* stash,
+				   struct fontstash_style style,
 				   float x, float y,
 				   const char* s, float* dx)
 {
 	int nq = 0;
-	sth_draw_text_buf(stash, style, x, y, s, &stash->quads[stash->nquads], stash->cquads - stash->nquads, &nq, dx);
+	fontstash_draw_text_buf(stash, style, x, y, s, &stash->quads[stash->nquads], stash->cquads - stash->nquads, &nq, dx);
 	stash->nquads += nq;
 }
 
-void sth_draw_text_buf(struct sth_stash* stash,
-					   struct sth_style style,
+void fontstash_draw_text_buf(struct fontstash* stash,
+					   struct fontstash_style style,
 					   float x, float y, const char* s,
-					   sth_quad* quads, int maxquads, int* nquads, float* dx)
+					   fontstash_quad* quads, int maxquads, int* nquads, float* dx)
 {
 	unsigned int codepoint;
 	unsigned int state = 0;
-	struct sth_glyph* glyph = NULL;
-	struct sth_glyph* prevglyph = NULL;
+	struct fontstash_glyph* glyph = NULL;
+	struct fontstash_glyph* prevglyph = NULL;
 	short isize = (short)(style.size*10.0f);
 	float scale;
 	float* v;
-	struct sth_font* fnt;
+	struct fontstash_font* fnt;
 	int nq = 0;
 	
 	if (stash == NULL) return;
-	if (style.font < 0 || style.font >= STH_MAX_FONTS) return;
+	if (style.font < 0 || style.font >= FONTSTASH_MAX_FONTS) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
@@ -512,15 +512,15 @@ void sth_draw_text_buf(struct sth_stash* stash,
 	
 	for (; *s; ++s)
 	{
-		if (decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
+		if (_fontstash_decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
 
-		glyph = get_glyph(stash, fnt, codepoint, isize);
+		glyph = _fontstash_get_glyph(stash, fnt, codepoint, isize);
 		if (glyph)
 		{
 			if (nq < maxquads)
 			{
-				sth_quad* q = &quads[nq];
-				get_quad(stash, fnt, prevglyph, glyph, scale, &x, &y, q);
+				fontstash_quad* q = &quads[nq];
+				_fontstash_get_quad(stash, fnt, prevglyph, glyph, scale, &x, &y, q);
 				q->c = style.color;
 				nq++;
 			}
@@ -532,23 +532,23 @@ void sth_draw_text_buf(struct sth_stash* stash,
 	if (nquads) *nquads = nq;
 }
 
-void sth_text_bounds(struct sth_stash* stash,
-					 struct sth_style style,
+void fontstash_text_bounds(struct fontstash* stash,
+					 struct fontstash_style style,
 					 const char* s,
 					 float* minx, float* miny, float* maxx, float* maxy)
 {
 	unsigned int codepoint;
 	unsigned int state = 0;
-	struct sth_quad q;
-	struct sth_glyph* glyph = NULL;
-	struct sth_glyph* prevglyph = NULL;
+	struct fontstash_quad q;
+	struct fontstash_glyph* glyph = NULL;
+	struct fontstash_glyph* prevglyph = NULL;
 	short isize = (short)(style.size*10.0f);
 	float scale;
-	struct sth_font* fnt;
+	struct fontstash_font* fnt;
 	float x = 0, y = 0;
 	
 	if (stash == NULL) return;
-	if (style.font < 0 || style.font >= STH_MAX_FONTS) return;
+	if (style.font < 0 || style.font >= FONTSTASH_MAX_FONTS) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
@@ -559,11 +559,11 @@ void sth_text_bounds(struct sth_stash* stash,
 
 	for (; *s; ++s)
 	{
-		if (decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
-		glyph = get_glyph(stash, fnt, codepoint, isize);
+		if (_fontstash_decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
+		glyph = _fontstash_get_glyph(stash, fnt, codepoint, isize);
 		if (glyph)
 		{
-			get_quad(stash, fnt, prevglyph, glyph, scale, &x, &y, &q);
+			_fontstash_get_quad(stash, fnt, prevglyph, glyph, scale, &x, &y, &q);
 			if (q.x0 < *minx) *minx = q.x0;
 			if (q.x1 > *maxx) *maxx = q.x1;
 			if (q.y1 < *miny) *miny = q.y1;
@@ -573,12 +573,12 @@ void sth_text_bounds(struct sth_stash* stash,
 	}
 }
 
-void sth_vert_metrics(struct sth_stash* stash,
-					  struct sth_style style,
+void fontstash_vert_metrics(struct fontstash* stash,
+					  struct fontstash_style style,
 					  float* ascender, float* descender, float* lineh)
 {
 	if (stash == NULL) return;
-	if (style.font < 0 || style.font >= STH_MAX_FONTS) return;
+	if (style.font < 0 || style.font >= FONTSTASH_MAX_FONTS) return;
 	if (!stash->fonts[style.font].data) return;
 	if (ascender)
 		*ascender = stash->fonts[style.font].ascender*style.size;
@@ -588,14 +588,14 @@ void sth_vert_metrics(struct sth_stash* stash,
 		*lineh = stash->fonts[style.font].lineh*style.size;
 }
 
-int sth_get_quads(struct sth_stash* stash, struct sth_quad** quads, int* nquads)
+int fontstash_get_quads(struct fontstash* stash, struct fontstash_quad** quads, int* nquads)
 {
 	*quads = stash->quads;
 	*nquads = stash->nquads;
 	return 1;
 }
 
-int sth_get_texture(struct sth_stash* stash, unsigned char** tdata, int* tw, int* th, int* dirty)
+int fontstash_get_texture(struct fontstash* stash, unsigned char** tdata, int* tw, int* th, int* dirty)
 {
 	*tdata = stash->tdata;
 	*tw = stash->tw;
@@ -607,13 +607,13 @@ int sth_get_texture(struct sth_stash* stash, unsigned char** tdata, int* tw, int
 	return 1;
 }
 
-void sth_flush_draw(struct sth_stash* stash, int flags)
+void fontstash_flush_draw(struct fontstash* stash, int flags)
 {
-	if (flags & STH_FLUSH_QUADS)
+	if (flags & FONTSTASH_FLUSH_QUADS)
 	{
 		stash->nquads = 0;
 	}
-	if (flags & STH_FLUSH_TEXTURE)
+	if (flags & FONTSTASH_FLUSH_TEXTURE)
 	{
 		stash->dirtyrect[0] = stash->tw;
 		stash->dirtyrect[1] = stash->th;
@@ -622,11 +622,11 @@ void sth_flush_draw(struct sth_stash* stash, int flags)
 	}
 }
 
-void sth_delete(struct sth_stash* stash)
+void fontstash_delete(struct fontstash* stash)
 {
 	int i;
 	if (!stash) return;
-	for (i = 0; i < STH_MAX_FONTS; ++i)
+	for (i = 0; i < FONTSTASH_MAX_FONTS; ++i)
 	{
 		if (stash->fonts[i].data)
 			free(stash->fonts[i].data);
