@@ -1,18 +1,21 @@
+CC     ?= gcc
+WARN   ?= -pedantic -Wextra -Wdisabled-optimization -Wundef -Wmissing-braces \
+		  -Wformat=2 -Waggregate-return -Wunreachable-code -Wcast-align \
+		  -Wcast-qual -Wpointer-arith -Wredundant-decls -Wundef \
+		  -Wstrict-aliasing=2 -Wno-unused-parameter
+CFLAGS ?= -std=c11 -g $(WARN)
 
-CC=gcc
-CFLAGS=-g
-
-OBJS=\
+OBJS =\
 	main.o\
 
-DEPS=\
+DEPS =\
 	fontstash.h\
 	glstash.h\
 
-LIBS=-lglfw3 -framework Cocoa -framework OpenGL -framework IOKit -framework CoreFoundation
+LIBS = -lglfw3 -framework Cocoa -framework OpenGL -framework IOKit -framework CoreFoundation
 
 test: $(OBJS) $(DEPS)
-	$(CC) $(CXXFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
 
 clean:
 	rm -rf test $(OBJS)
