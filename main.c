@@ -18,10 +18,9 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
-#include <GLFW/glfw3.h>
 #define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
+#include <GLFW/glfw3.h>
 #define GLSTASH_IMPLEMENTATION
 #include "glstash.h"
 
