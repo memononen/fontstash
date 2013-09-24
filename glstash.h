@@ -18,11 +18,12 @@
 #ifndef GLSTASH_H
 #define GLSTASH_H
 
-
 struct glstash* glstash_create(int width, int height, int nquads);
 void glstash_draw(struct glstash* gl, struct fontstash* stash);
 void glstash_delete(struct glstash* gl);
 unsigned int glrgba(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+
+#endif
 
 #ifdef GLSTASH_IMPLEMENTATION
 
@@ -104,8 +105,8 @@ void glstash_draw(struct glstash* gl, struct fontstash* stash)
 	// Draw quads
 	if (fontstash_get_quads(stash, &quads, &nquads))
 	{
-		int nv = 0;	
-		for (int i = 0; i < nquads; i++)
+		int nv = 0, i;	
+		for (i = 0; i < nquads; i++)
 		{
 			struct fontstash_quad* q = &quads[i];
 			nv = _glstash_setv(gl, nv, q->x0, q->y0, q->s0, q->t0, q->c);
@@ -153,7 +154,5 @@ unsigned int glrgba(unsigned char r, unsigned char g, unsigned char b, unsigned 
 {
 	return (r) | (g << 8) | (b << 16) | (a << 24);
 }
-
-#endif
 
 #endif

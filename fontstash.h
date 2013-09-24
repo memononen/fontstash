@@ -44,7 +44,7 @@ enum fontstash_flush_flags {
 };
 
 
-struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, unsigned int flags);
+struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, int maxfonts, unsigned int flags);
 
 int fontstash_add_font(struct fontstash*, int idx, const char* path);
 
@@ -74,13 +74,10 @@ void fontstash_flush_draw(struct fontstash* stash, int flags);
 
 void fontstash_delete(struct fontstash* stash);
 
+#endif // FONTSTASH_H
+
 
 #ifdef FONTSTASH_IMPLEMENTATION
-
-/*#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "fontstash.h"*/
 
 #define STB_TRUETYPE_IMPLEMENTATION
 static void* _fontstash_tmpalloc(size_t size, void* up);
@@ -97,9 +94,6 @@ static void _fontstash_tmpfree(void* ptr, void* up);
 #endif
 #ifndef FONTSTASH_MAX_ROWS
 #	define FONTSTASH_MAX_ROWS 128
-#endif
-#ifndef FONTSTASH_MAX_FONTS
-#	define FONTSTASH_MAX_FONTS 4
 #endif
 #ifndef FONTSTASH_MAX_GLYPHS
 #	define FONTSTASH_MAX_GLYPHS 1024
@@ -161,9 +155,10 @@ struct fontstash
 	int dirtyrect[4];
 	struct fontstash_row rows[FONTSTASH_MAX_ROWS];
 	int nrows;
-	struct fontstash_font fonts[FONTSTASH_MAX_FONTS];
+	struct fontstash_font* fonts;
+	int maxfonts;
 	struct fontstash_quad* quads;
-	int cquads;
+	int maxquads;
 	int nquads;
 	unsigned char scratch[FONTSTASH_SCRATCH_BUF_SIZE];
 	int nscratch;
@@ -220,7 +215,7 @@ static unsigned int _fontstash_decutf8(unsigned int* state, unsigned int* codep,
 
 
 
-struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, unsigned int flags)
+struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, int maxfonts, unsigned int flags)
 {
 	struct fontstash* stash;
 
@@ -229,11 +224,17 @@ struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, unsigne
 	if (stash == NULL) goto error;
 	memset(stash, 0, sizeof(struct fontstash));
 
+	// Allocate space for fonts.
+	stash->fonts = (struct fontstash_font*)malloc(sizeof(struct fontstash_font) * maxfonts);
+	if (stash->fonts == NULL) goto error;
+	memset(stash->fonts, 0, sizeof(struct fontstash_font) * maxfonts);
+	stash->maxfonts = maxfonts;
+
 	// Allocate space for quad rendering.
 	stash->quads = (struct fontstash_quad *)malloc(sizeof(struct fontstash_quad) * maxquads);
 	if (stash->quads == NULL) goto error;
 	memset(stash->quads, 0, sizeof(struct fontstash_quad) * maxquads);
-	stash->cquads = maxquads;
+	stash->maxquads = maxquads;
 	stash->nquads = 0;
 
 	// Create texture for the cache.
@@ -298,7 +299,7 @@ int fontstash_add_font_mem(struct fontstash* stash, int idx, unsigned char* data
 	int i, ascent, descent, fh, lineGap;
 	struct fontstash_font* fnt;
 	
-	if (idx < 0 || idx >= FONTSTASH_MAX_FONTS) return 0;
+	if (idx < 0 || idx >= stash->maxfonts) return 0;
 	
 	fnt = &stash->fonts[idx];
 	if (fnt->data)
@@ -484,7 +485,7 @@ void fontstash_draw_text(struct fontstash* stash,
 				   const char* s, float* dx)
 {
 	int nq = 0;
-	fontstash_draw_text_buf(stash, style, x, y, s, &stash->quads[stash->nquads], stash->cquads - stash->nquads, &nq, dx);
+	fontstash_draw_text_buf(stash, style, x, y, s, &stash->quads[stash->nquads], stash->maxquads - stash->nquads, &nq, dx);
 	stash->nquads += nq;
 }
 
@@ -504,7 +505,7 @@ void fontstash_draw_text_buf(struct fontstash* stash,
 	int nq = 0;
 	
 	if (stash == NULL) return;
-	if (style.font < 0 || style.font >= FONTSTASH_MAX_FONTS) return;
+	if (style.font < 0 || style.font >= stash->maxfonts) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
@@ -548,7 +549,7 @@ void fontstash_text_bounds(struct fontstash* stash,
 	float x = 0, y = 0;
 	
 	if (stash == NULL) return;
-	if (style.font < 0 || style.font >= FONTSTASH_MAX_FONTS) return;
+	if (style.font < 0 || style.font >= stash->maxfonts) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
@@ -578,7 +579,7 @@ void fontstash_vert_metrics(struct fontstash* stash,
 					  float* ascender, float* descender, float* lineh)
 {
 	if (stash == NULL) return;
-	if (style.font < 0 || style.font >= FONTSTASH_MAX_FONTS) return;
+	if (style.font < 0 || style.font >= stash->maxfonts) return;
 	if (!stash->fonts[style.font].data) return;
 	if (ascender)
 		*ascender = stash->fonts[style.font].ascender*style.size;
@@ -626,7 +627,7 @@ void fontstash_delete(struct fontstash* stash)
 {
 	int i;
 	if (!stash) return;
-	for (i = 0; i < FONTSTASH_MAX_FONTS; ++i)
+	for (i = 0; i < stash->maxfonts; ++i)
 	{
 		if (stash->fonts[i].data)
 			free(stash->fonts[i].data);
@@ -636,5 +637,3 @@ void fontstash_delete(struct fontstash* stash)
 }
 
 #endif
-
-#endif // FONTSTASH_H

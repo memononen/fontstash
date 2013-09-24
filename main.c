@@ -17,7 +17,6 @@
 //
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <GLFW/glfw3.h>
@@ -47,7 +46,6 @@ int main()
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
 	struct fontstash* stash = NULL;
-	float t = 0.0f;
 	struct glstash* gl = NULL;
 
 	if (!glfwInit())
@@ -66,7 +64,7 @@ int main()
 	gl = glstash_create(512, 512, 256);
 
 
-	stash = fontstash_create(512, 512, 256, FONTSTASH_ZERO_TOPLEFT);
+	stash = fontstash_create(512, 512, 256, 4, FONTSTASH_ZERO_TOPLEFT);
 	if (!stash)
 	{
 		printf("Could not create stash.\n");
@@ -119,13 +117,6 @@ int main()
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
-		glBegin(GL_LINES);
-		glColor4ub(0,0,0,128);
-		glVertex2f(0,0);
-		glVertex2f(width,height);
-		glEnd();
-
-		t = glfwGetTime();
 
 		unsigned int white = glrgba(255,255,255,255);
 		unsigned int brown = glrgba(192,128,0,128);
