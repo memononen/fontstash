@@ -57,7 +57,7 @@ void fontstash_draw_text(struct fontstash* stash,
 void fontstash_draw_text_buf(struct fontstash* stash,
 					   struct fontstash_style style,
 					   float x, float y, const char* string,
-					   fontstash_quad* quads, int maxquads, int* nquads, float* dx);
+					   struct fontstash_quad* quads, int maxquads, int* nquads, float* dx);
 
 void fontstash_text_bounds(struct fontstash* stash,
 					 struct fontstash_style style,
@@ -230,9 +230,9 @@ struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, unsigne
 	memset(stash, 0, sizeof(struct fontstash));
 
 	// Allocate space for quad rendering.
-	stash->quads = (struct fontstash_quad *)malloc(sizeof(fontstash_quad) * maxquads);
+	stash->quads = (struct fontstash_quad *)malloc(sizeof(struct fontstash_quad) * maxquads);
 	if (stash->quads == NULL) goto error;
-	memset(stash->quads, 0, sizeof(fontstash_quad) * maxquads);
+	memset(stash->quads, 0, sizeof(struct fontstash_quad) * maxquads);
 	stash->cquads = maxquads;
 	stash->nquads = 0;
 
@@ -491,7 +491,7 @@ void fontstash_draw_text(struct fontstash* stash,
 void fontstash_draw_text_buf(struct fontstash* stash,
 					   struct fontstash_style style,
 					   float x, float y, const char* s,
-					   fontstash_quad* quads, int maxquads, int* nquads, float* dx)
+					   struct fontstash_quad* quads, int maxquads, int* nquads, float* dx)
 {
 	unsigned int codepoint;
 	unsigned int state = 0;
@@ -519,7 +519,7 @@ void fontstash_draw_text_buf(struct fontstash* stash,
 		{
 			if (nq < maxquads)
 			{
-				fontstash_quad* q = &quads[nq];
+				struct fontstash_quad* q = &quads[nq];
 				_fontstash_get_quad(stash, fnt, prevglyph, glyph, scale, &x, &y, q);
 				q->c = style.color;
 				nq++;
