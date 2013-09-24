@@ -5,6 +5,10 @@ Font stash is light-weight online font texture atlas builder. It uses stb_truety
 
 The code is split in two parts, the font atlas and glyph quad generator (fontstash.h), and an example OpenGL backend (glstash.h).
 
+## Screenshot
+
+![screenshot of some text rendered witht the sample program](/screenshots/screen-01.png?raw=true)
+
 ## Example
 ``` C
 	// Create stash and rendering backend.
