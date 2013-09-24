@@ -513,7 +513,7 @@ void fontstash_draw_text_buf(struct fontstash* stash,
 	
 	for (; *s; ++s)
 	{
-		if (_fontstash_decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
+		if (_fontstash_decutf8(&state, &codepoint, *(const unsigned char*)s)) continue;
 
 		glyph = _fontstash_get_glyph(stash, fnt, codepoint, isize);
 		if (glyph)
@@ -560,7 +560,7 @@ void fontstash_text_bounds(struct fontstash* stash,
 
 	for (; *s; ++s)
 	{
-		if (_fontstash_decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
+		if (_fontstash_decutf8(&state, &codepoint, *(const unsigned char*)s)) continue;
 		glyph = _fontstash_get_glyph(stash, fnt, codepoint, isize);
 		if (glyph)
 		{
