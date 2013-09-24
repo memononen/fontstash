@@ -128,6 +128,7 @@ struct fontstash_row
 struct fontstash_glyph
 {
 	unsigned int codepoint;
+	int index;
 	int next;
 	short size;
 	short x0,y0,x1,y1;
@@ -367,7 +368,6 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 	gw = x1-x0;
 	gh = y1-y0;
 
-
 	// Find row where the glyph can be fit.
 	br = NULL;
 	rh = (gh+7) & ~7;
@@ -406,6 +406,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 	memset(glyph, 0, sizeof(struct fontstash_glyph));
 	glyph->codepoint = codepoint;
 	glyph->size = isize;
+	glyph->index = g;
 	glyph->x0 = br->x;
 	glyph->y0 = br->y;
 	glyph->x1 = glyph->x0+gw;
@@ -441,7 +442,7 @@ static void _fontstash_get_quad(struct fontstash* stash, struct fontstash_font* 
 	int rx,ry;
 	if (prevglyph)
 	{
-		float adv = stbtt_GetCodepointKernAdvance(&fnt->font, prevglyph->codepoint, glyph->codepoint) * scale;
+		float adv = stbtt_GetGlyphKernAdvance(&fnt->font, prevglyph->index, glyph->index) * scale;
 		*x += adv;
 	}
 	
