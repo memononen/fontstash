@@ -10,7 +10,8 @@ DEPS=\
 	fontstash.h\
 	glstash.h\
 
-LIBS=-lglfw3 -framework Cocoa -framework OpenGL -framework IOKit -framework CoreFoundation
+CXXFLAGS+=$(shell pkg-config --cflags glfw3)
+LIBS=-framework Cocoa -framework OpenGL -framework IOKit -framework CoreFoundation $(shell pkg-config --libs glfw3)
 
 test: $(OBJS) $(DEPS)
 	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LIBS)
