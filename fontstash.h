@@ -23,7 +23,6 @@ struct fontstash_style {
 	int font;
 	float size;
 	unsigned int color;
-	int align;
 };
 
 struct fontstash_quad
