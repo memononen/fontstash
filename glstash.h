@@ -66,7 +66,7 @@ error:
 	return NULL;
 }
 
-inline int _glstash_setv(struct glstash* gl, int i, float x, float y, float s, float t, unsigned int c)
+inline static int _glstash_setv(struct glstash* gl, int i, float x, float y, float s, float t, unsigned int c)
 {
 	gl->verts[i*2+0] = x;
 	gl->verts[i*2+1] = y;
