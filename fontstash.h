@@ -174,12 +174,12 @@ static void* _fontstash_tmpalloc(size_t size, void* up)
 	stash->nscratch += (int)size;
 	return ptr;
 }
-	
+
 static void _fontstash_tmpfree(void* ptr, void* up)
 {
 	// empty
-}		
-		
+}
+
 
 
 // Copyright (c) 2008-2009 Bjoern Hoehrmann <bjoern@hoehrmann.de>
@@ -253,7 +253,7 @@ struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, int max
 	stash->dirtyrect[3] = 0;
 
 	return stash;
-	
+
 error:
 	if (stash != NULL)
 	{
@@ -298,26 +298,26 @@ int fontstash_add_font_mem(struct fontstash* stash, int idx, unsigned char* data
 {
 	int i, ascent, descent, fh, lineGap;
 	struct fontstash_font* fnt;
-	
+
 	if (idx < 0 || idx >= stash->maxfonts) return 0;
-	
+
 	fnt = &stash->fonts[idx];
 	if (fnt->data)
 		free(fnt->data);
 	memset(fnt,0,sizeof(struct fontstash_font));
-	
+
 	// Init hash lookup.
 	for (i = 0; i < FONTSTASH_HASH_LUT_SIZE; ++i) fnt->lut[i] = -1;
-	
+
 	// Read in the font data.
 	fnt->datasize = datasize;
 	fnt->data = data;
-	
+
 	// Init stb_truetype
 	stash->nscratch = 0;
 	fnt->font.userdata = stash;
 	if (!stbtt_InitFont(&fnt->font, fnt->data, 0)) goto error;
-	
+
 	// Store normalized line height. The real line height is got
 	// by multiplying the lineh by font size.
 	stbtt_GetFontVMetrics(&fnt->font, &ascent, &descent, &lineGap);
@@ -325,9 +325,9 @@ int fontstash_add_font_mem(struct fontstash* stash, int idx, unsigned char* data
 	fnt->ascender = (float)ascent / (float)fh;
 	fnt->descender = (float)descent / (float)fh;
 	fnt->lineh = (float)(fh + lineGap) / (float)fh;
-	
+
 	return 1;
-	
+
 error:
 	memset(fnt,0,sizeof(struct fontstash_font));
 	return 0;
@@ -342,7 +342,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 	float size = isize/10.0f;
 	int rh;
 	struct fontstash_row* br;
-	
+
 	// Reset allocator.
 	stash->nscratch = 0;
 
@@ -359,7 +359,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 	// Could not find glyph, create it.
 	if (fnt->nglyphs >= FONTSTASH_MAX_GLYPHS)
 		return 0;
-	
+
 	scale = stbtt_ScaleForPixelHeight(&fnt->font, size);
 	g = stbtt_FindGlyphIndex(&fnt->font, codepoint);
 	stbtt_GetGlyphHMetrics(&fnt->font, g, &advance, &lsb);
@@ -375,7 +375,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 		if (stash->rows[i].h == rh && stash->rows[i].x+gw+1 <= stash->tw)
 			br = &stash->rows[i];
 	}
-	
+
 	// If no row found, add new.
 	if (br == NULL)
 	{
@@ -396,7 +396,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 		br->h = rh;
 		stash->nrows++;
 	}
-	
+
 	// Alloc space for new glyph.
 	fnt->nglyphs++;
 
@@ -417,7 +417,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 
 	// Advance row location.
 	br->x += gw+1;
-	
+
 	// Insert char to hash lookup.
 	glyph->next = fnt->lut[h];
 	fnt->lut[h] = fnt->nglyphs-1;
@@ -444,17 +444,17 @@ static void _fontstash_get_quad(struct fontstash* stash, struct fontstash_font* 
 		float adv = stbtt_GetGlyphKernAdvance(&fnt->font, prevglyph->index, glyph->index) * scale;
 		*x += adv;
 	}
-	
+
 	if (stash->flags & FONTSTASH_ZERO_TOPLEFT)
 	{
 		rx = (int)(*x + glyph->xoff);
 		ry = (int)(*y + glyph->yoff);
-		
+
 		q->x0 = rx;
 		q->y0 = ry;
 		q->x1 = rx + glyph->x1 - glyph->x0;
 		q->y1 = ry + glyph->y1 - glyph->y0;
-		
+
 		q->s0 = (glyph->x0) * stash->itw;
 		q->t0 = (glyph->y0) * stash->ith;
 		q->s1 = (glyph->x1) * stash->itw;
@@ -464,12 +464,12 @@ static void _fontstash_get_quad(struct fontstash* stash, struct fontstash_font* 
 	{
 		rx = (int)(*x + glyph->xoff);
 		ry = (int)(*y - glyph->yoff);
-		
+
 		q->x0 = rx;
 		q->y0 = ry;
 		q->x1 = rx + glyph->x1 - glyph->x0;
 		q->y1 = ry - glyph->y1 + glyph->y0;
-		
+
 		q->s0 = (glyph->x0) * stash->itw;
 		q->t0 = (glyph->y0) * stash->ith;
 		q->s1 = (glyph->x1) * stash->itw;
@@ -503,14 +503,14 @@ void fontstash_draw_text_buf(struct fontstash* stash,
 	float* v;
 	struct fontstash_font* fnt;
 	int nq = 0;
-	
+
 	if (stash == NULL) return;
 	if (style.font < 0 || style.font >= stash->maxfonts) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
 	scale = stbtt_ScaleForPixelHeight(&fnt->font, (float)isize/10.0f);
-	
+
 	for (; *s; ++s)
 	{
 		if (_fontstash_decutf8(&state, &codepoint, *(const unsigned char*)s)) continue;
@@ -528,7 +528,7 @@ void fontstash_draw_text_buf(struct fontstash* stash,
 		}
 		prevglyph = glyph;
 	}
-	
+
 	if (dx) *dx = x;
 	if (nquads) *nquads = nq;
 }
@@ -547,14 +547,14 @@ void fontstash_text_bounds(struct fontstash* stash,
 	float scale;
 	struct fontstash_font* fnt;
 	float x = 0, y = 0;
-	
+
 	if (stash == NULL) return;
 	if (style.font < 0 || style.font >= stash->maxfonts) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
 	scale = stbtt_ScaleForPixelHeight(&fnt->font, (float)isize/10.0f);
-	
+
 	*minx = *maxx = x;
 	*miny = *maxy = y;
 
