@@ -95,7 +95,7 @@ int main()
 
 	while (!glfwWindowShouldClose(window))
 	{
-		float sx,sy,dx,dy,lh, t;
+		float sx, sy, dx, dy, t, lh = 0;
 		int width, height;
 		glfwGetFramebufferSize(window, &width, &height);
 		// Update and render
