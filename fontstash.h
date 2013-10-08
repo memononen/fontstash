@@ -23,7 +23,6 @@ struct fontstash_style {
 	int font;
 	float size;
 	unsigned int color;
-	int align;
 };
 
 struct fontstash_quad
@@ -175,46 +174,50 @@ static void* _fontstash_tmpalloc(size_t size, void* up)
 	stash->nscratch += (int)size;
 	return ptr;
 }
-	
+
 static void _fontstash_tmpfree(void* ptr, void* up)
 {
 	// empty
-}		
-		
+}
 
-
-// Copyright (c) 2008-2009 Bjoern Hoehrmann <bjoern@hoehrmann.de>
+// Copyright (c) 2008-2010 Bjoern Hoehrmann <bjoern@hoehrmann.de>
 // See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
 
 #define FONTSTASH_UTF8_ACCEPT 0
-#define FONTSTASH_UTF8_REJECT 1
+#define FONTSTASH_UTF8_REJECT 12
 
 static unsigned int _fontstash_decutf8(unsigned int* state, unsigned int* codep, unsigned int byte)
 {
-	static const unsigned char utf8d[] = {
-		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 00..1f
-		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 20..3f
-		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 40..5f
-		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 60..7f
-		1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9, // 80..9f
-		7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7, // a0..bf
-		8,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // c0..df
-		0xa,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x3,0x4,0x3,0x3, // e0..ef
-		0xb,0x6,0x6,0x6,0x5,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8,0x8, // f0..ff
-		0x0,0x1,0x2,0x3,0x5,0x8,0x7,0x1,0x1,0x1,0x4,0x6,0x1,0x1,0x1,0x1, // s0..s0
-		1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,1, // s1..s2
-		1,2,1,1,1,1,1,2,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1, // s3..s4
-		1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,3,1,3,1,1,1,1,1,1, // s5..s6
-		1,3,1,1,1,1,1,3,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // s7..s8
-	};
+    static const unsigned char utf8d[] = {
+      // The first part of the table maps bytes to character classes that
+      // to reduce the size of the transition table and create bitmasks.
+       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+       1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,  9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,
+       7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+       8,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2,  2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+      10,3,3,3,3,3,3,3,3,3,3,3,3,4,3,3, 11,6,6,6,5,8,8,8,8,8,8,8,8,8,8,8,
 
-	unsigned int type = utf8d[byte];
-	*codep = (*state != FONTSTASH_UTF8_ACCEPT) ? (byte & 0x3fu) | (*codep << 6) : (0xff >> type) & (byte);
-	*state = utf8d[256 + *state*16 + type];
-	return *state;
+      // The second part is a transition table that maps a combination
+      // of a state of the automaton and a character class to a state.
+       0,12,24,36,60,96,84,12,12,12,48,72, 12,12,12,12,12,12,12,12,12,12,12,12,
+      12, 0,12,12,12,12,12, 0,12, 0,12,12, 12,24,12,12,12,12,12,24,12,24,12,12,
+      12,12,12,12,12,12,12,24,12,12,12,12, 12,24,12,12,12,12,12,12,12,24,12,12,
+      12,12,12,12,12,12,12,36,12,36,12,12, 12,36,12,12,12,12,12,36,12,36,12,12,
+      12,36,12,12,12,12,12,12,12,12,12,12,
+    };
+
+    unsigned int type = utf8d[byte];
+
+    *codep = (*state != FONTSTASH_UTF8_ACCEPT) ?
+      (byte & 0x3fu) | (*codep << 6) :
+      (0xff >> type) & (byte);
+
+    *state = utf8d[256 + *state + type];
+    return *state;
 }
-
-
 
 struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, int maxfonts, unsigned int flags)
 {
@@ -254,7 +257,7 @@ struct fontstash* fontstash_create(int cachew, int cacheh, int maxquads, int max
 	stash->dirtyrect[3] = 0;
 
 	return stash;
-	
+
 error:
 	if (stash != NULL)
 	{
@@ -299,26 +302,26 @@ int fontstash_add_font_mem(struct fontstash* stash, int idx, unsigned char* data
 {
 	int i, ascent, descent, fh, lineGap;
 	struct fontstash_font* fnt;
-	
+
 	if (idx < 0 || idx >= stash->maxfonts) return 0;
-	
+
 	fnt = &stash->fonts[idx];
 	if (fnt->data)
 		free(fnt->data);
 	memset(fnt,0,sizeof(struct fontstash_font));
-	
+
 	// Init hash lookup.
 	for (i = 0; i < FONTSTASH_HASH_LUT_SIZE; ++i) fnt->lut[i] = -1;
-	
+
 	// Read in the font data.
 	fnt->datasize = datasize;
 	fnt->data = data;
-	
+
 	// Init stb_truetype
 	stash->nscratch = 0;
 	fnt->font.userdata = stash;
 	if (!stbtt_InitFont(&fnt->font, fnt->data, 0)) goto error;
-	
+
 	// Store normalized line height. The real line height is got
 	// by multiplying the lineh by font size.
 	stbtt_GetFontVMetrics(&fnt->font, &ascent, &descent, &lineGap);
@@ -326,9 +329,9 @@ int fontstash_add_font_mem(struct fontstash* stash, int idx, unsigned char* data
 	fnt->ascender = (float)ascent / (float)fh;
 	fnt->descender = (float)descent / (float)fh;
 	fnt->lineh = (float)(fh + lineGap) / (float)fh;
-	
+
 	return 1;
-	
+
 error:
 	memset(fnt,0,sizeof(struct fontstash_font));
 	return 0;
@@ -343,7 +346,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 	float size = isize/10.0f;
 	int rh;
 	struct fontstash_row* br;
-	
+
 	// Reset allocator.
 	stash->nscratch = 0;
 
@@ -360,7 +363,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 	// Could not find glyph, create it.
 	if (fnt->nglyphs >= FONTSTASH_MAX_GLYPHS)
 		return 0;
-	
+
 	scale = stbtt_ScaleForPixelHeight(&fnt->font, size);
 	g = stbtt_FindGlyphIndex(&fnt->font, codepoint);
 	stbtt_GetGlyphHMetrics(&fnt->font, g, &advance, &lsb);
@@ -376,7 +379,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 		if (stash->rows[i].h == rh && stash->rows[i].x+gw+1 <= stash->tw)
 			br = &stash->rows[i];
 	}
-	
+
 	// If no row found, add new.
 	if (br == NULL)
 	{
@@ -397,7 +400,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 		br->h = rh;
 		stash->nrows++;
 	}
-	
+
 	// Alloc space for new glyph.
 	fnt->nglyphs++;
 
@@ -418,7 +421,7 @@ static struct fontstash_glyph* _fontstash_get_glyph(struct fontstash* stash, str
 
 	// Advance row location.
 	br->x += gw+1;
-	
+
 	// Insert char to hash lookup.
 	glyph->next = fnt->lut[h];
 	fnt->lut[h] = fnt->nglyphs-1;
@@ -445,17 +448,17 @@ static void _fontstash_get_quad(struct fontstash* stash, struct fontstash_font* 
 		float adv = stbtt_GetGlyphKernAdvance(&fnt->font, prevglyph->index, glyph->index) * scale;
 		*x += adv;
 	}
-	
+
 	if (stash->flags & FONTSTASH_ZERO_TOPLEFT)
 	{
 		rx = (int)(*x + glyph->xoff);
 		ry = (int)(*y + glyph->yoff);
-		
+
 		q->x0 = rx;
 		q->y0 = ry;
 		q->x1 = rx + glyph->x1 - glyph->x0;
 		q->y1 = ry + glyph->y1 - glyph->y0;
-		
+
 		q->s0 = (glyph->x0) * stash->itw;
 		q->t0 = (glyph->y0) * stash->ith;
 		q->s1 = (glyph->x1) * stash->itw;
@@ -465,12 +468,12 @@ static void _fontstash_get_quad(struct fontstash* stash, struct fontstash_font* 
 	{
 		rx = (int)(*x + glyph->xoff);
 		ry = (int)(*y - glyph->yoff);
-		
+
 		q->x0 = rx;
 		q->y0 = ry;
 		q->x1 = rx + glyph->x1 - glyph->x0;
 		q->y1 = ry - glyph->y1 + glyph->y0;
-		
+
 		q->s0 = (glyph->x0) * stash->itw;
 		q->t0 = (glyph->y0) * stash->ith;
 		q->s1 = (glyph->x1) * stash->itw;
@@ -504,17 +507,17 @@ void fontstash_draw_text_buf(struct fontstash* stash,
 	float* v;
 	struct fontstash_font* fnt;
 	int nq = 0;
-	
+
 	if (stash == NULL) return;
 	if (style.font < 0 || style.font >= stash->maxfonts) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
 	scale = stbtt_ScaleForPixelHeight(&fnt->font, (float)isize/10.0f);
-	
+
 	for (; *s; ++s)
 	{
-		if (_fontstash_decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
+		if (_fontstash_decutf8(&state, &codepoint, *(const unsigned char*)s)) continue;
 
 		glyph = _fontstash_get_glyph(stash, fnt, codepoint, isize);
 		if (glyph)
@@ -529,7 +532,7 @@ void fontstash_draw_text_buf(struct fontstash* stash,
 		}
 		prevglyph = glyph;
 	}
-	
+
 	if (dx) *dx = x;
 	if (nquads) *nquads = nq;
 }
@@ -548,20 +551,20 @@ void fontstash_text_bounds(struct fontstash* stash,
 	float scale;
 	struct fontstash_font* fnt;
 	float x = 0, y = 0;
-	
+
 	if (stash == NULL) return;
 	if (style.font < 0 || style.font >= stash->maxfonts) return;
 	fnt = &stash->fonts[style.font];
 	if (!fnt->data) return;
 
 	scale = stbtt_ScaleForPixelHeight(&fnt->font, (float)isize/10.0f);
-	
+
 	*minx = *maxx = x;
 	*miny = *maxy = y;
 
 	for (; *s; ++s)
 	{
-		if (_fontstash_decutf8(&state, &codepoint, *(unsigned char*)s)) continue;
+		if (_fontstash_decutf8(&state, &codepoint, *(const unsigned char*)s)) continue;
 		glyph = _fontstash_get_glyph(stash, fnt, codepoint, isize);
 		if (glyph)
 		{
