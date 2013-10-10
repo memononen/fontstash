@@ -3,7 +3,7 @@ WARN   ?= -pedantic -Wextra -Wdisabled-optimization -Wundef -Wmissing-braces \
 		  -Wformat=2 -Waggregate-return -Wunreachable-code -Wcast-align \
 		  -Wcast-qual -Wpointer-arith -Wredundant-decls -Wundef \
 		  -Wstrict-aliasing=2 -Wno-unused-parameter
-CFLAGS ?= -std=c11 -g $(WARN)
+CFLAGS ?= -std=c99 -g $(WARN)
 
 SCAN_BUILD ?= scan-build
 SCAN_VIEW ?= scan-view

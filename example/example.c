@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2009 Mikko Mononen memon@inside.org
+// Copyright (c) 2013 Mikko Mononen memon@inside.org
 //
 // This software is provided 'as-is', without any express or implied
 // warranty.  In no event will the authors be held liable for any damages
@@ -35,67 +35,69 @@ void dash(float dx, float dy)
 
 int main()
 {
-	enum {
-		FONT_NORMAL = 0,
-		FONT_ITALIC = 1,
-		FONT_BOLD = 2,
-		FONT_JAPANESE = 3,
-	};
+	int fontNormal = FONS_INVALID;
+	int fontItalic = FONS_INVALID;
+	int fontBold = FONS_INVALID;
+	int fontJapanese = FONS_INVALID;
 
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
-	struct fontstash* stash = NULL;
-	struct glstash* gl = NULL;
+	
+	struct FONSparams params;
+	struct FONScontext* fs = NULL;
 
 	if (!glfwInit())
 		return -1;
 
 	mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
     window = glfwCreateWindow(mode->width - 40, mode->height - 80, "Font Stash", NULL, NULL);
-	if (!window)
-	{
+	if (!window) {
 		glfwTerminate();
 		return -1;
 	}
 
 	glfwMakeContextCurrent(window);
 
-	gl = glstash_create(512, 512, 256);
+	memset(&params, 0, sizeof(params));
+	params.width = 512;
+	params.height = 512;
+	params.flags = FONS_ZERO_TOPLEFT;
 
+	if (glstInit(&params) == 0) {
+		printf("Could not create renderer.\n");
+		return -1;
+	}
 
-	stash = fontstash_create(512, 512, 256, 4, FONTSTASH_ZERO_TOPLEFT);
-	if (!stash)
-	{
+	fs = fonsCreate(&params);
+	if (fs == NULL) {
 		printf("Could not create stash.\n");
 		return -1;
 	}
 
-	if (!fontstash_add_font(stash, FONT_NORMAL, "fonts/DroidSerif-Regular.ttf"))
-	{
-		printf("Could not add font.\n");
+	fontNormal = fonsAddFont(fs, "../example/DroidSerif-Regular.ttf");
+	if (fontNormal == FONS_INVALID) {
+		printf("Could not add font normal.\n");
+		return -1;
+	}
+	fontItalic = fonsAddFont(fs, "../example/DroidSerif-Italic.ttf");
+	if (fontItalic == FONS_INVALID) {
+		printf("Could not add font italic.\n");
+		return -1;
+	}
+	fontBold = fonsAddFont(fs, "../example/DroidSerif-Bold.ttf");
+	if (fontBold == FONS_INVALID) {
+		printf("Could not add font bold.\n");
+		return -1;
+	}
+	fontJapanese = fonsAddFont(fs, "../example/DroidSansJapanese.ttf");
+	if (fontJapanese == FONS_INVALID) {
+		printf("Could not add font japanese.\n");
 		return -1;
 	}
 
-	if (!fontstash_add_font(stash, FONT_ITALIC, "fonts/DroidSerif-Italic.ttf"))
-	{
-		printf("Could not add font.\n");
-		return -1;
-	}	
-	if (!fontstash_add_font(stash, FONT_BOLD, "fonts/DroidSerif-Bold.ttf"))
-	{
-		printf("Could not add font.\n");
-		return -1;
-	}	
-	if (!fontstash_add_font(stash, FONT_JAPANESE, "fonts/DroidSansJapanese.ttf"))
-	{
-		printf("Could not add font.\n");
-		return -1;
-	}	
-
-
 	while (!glfwWindowShouldClose(window))
 	{
-		float sx, sy, dx, dy, t, lh = 0;
+		float sx, sy, dx, dy, lh = 0;
 		int width, height;
 		glfwGetFramebufferSize(window, &width, &height);
 		// Update and render
@@ -117,9 +119,9 @@ int main()
 		glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
 
-		unsigned int white = glrgba(255,255,255,255);
-		unsigned int brown = glrgba(192,128,0,128);
-		unsigned int blue = glrgba(0,192,255,255);
+		unsigned int white = glstRGBA(255,255,255,255);
+		unsigned int brown = glstRGBA(192,128,0,128);
+		unsigned int blue = glstRGBA(0,192,255,255);
 
 		sx = 100; sy = 100;
 		
@@ -127,60 +129,70 @@ int main()
 
 		dash(dx,dy);
 
-		struct fontstash_style styleBig = { FONT_NORMAL, 124.0f, white };
-		struct fontstash_style styleBrown = { FONT_ITALIC, 48.0f, brown };
-		struct fontstash_style styleN24 = { FONT_NORMAL, 24.0f, white };
-		struct fontstash_style styleI24 = { FONT_ITALIC, 24.0f, white };
-		struct fontstash_style styleB24 = { FONT_BOLD, 24.0f, white };
-		struct fontstash_style styleN12Blue = { FONT_NORMAL, 12.0f, blue };
-		struct fontstash_style styleI18 = { FONT_ITALIC, 18.0f, white };
-		struct fontstash_style styleJp = { FONT_JAPANESE, 18.0f, white };
-
-		fontstash_vert_metrics(stash, styleBig, NULL, NULL, &lh);
+		fonsSetSize(fs, 124.0f);
+		fonsSetFont(fs, fontNormal);
+		fonsVertMetrics(fs, NULL, NULL, &lh);
 		dx = sx;
 		dy += lh;
 		dash(dx,dy);
-		fontstash_draw_text(stash, styleBig, dx,dy,"The quick ",&dx);
-		fontstash_draw_text(stash, styleBrown, dx,dy,"brown ",&dx);
-		fontstash_draw_text(stash, styleN24, dx,dy,"fox ",&dx);
+		
+		fonsSetSize(fs, 124.0f);
+		fonsSetFont(fs, fontNormal);
+		fonsSetColor(fs, white);
+		fonsDrawText(fs, dx,dy,"The quick ",&dx);
 
-		fontstash_vert_metrics(stash, styleN24, NULL, NULL, &lh);
+		fonsSetSize(fs, 48.0f);
+		fonsSetFont(fs, fontItalic);
+		fonsSetColor(fs, brown);
+		fonsDrawText(fs, dx,dy,"brown ",&dx);
+
+		fonsSetSize(fs, 24.0f);
+		fonsSetFont(fs, fontNormal);
+		fonsSetColor(fs, white);
+		fonsDrawText(fs, dx,dy,"fox ",&dx);
+
+		fonsVertMetrics(fs, NULL, NULL, &lh);
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
-		fontstash_draw_text(stash, styleI24, dx,dy,"jumps over ",&dx);
-		fontstash_draw_text(stash, styleB24, dx,dy,"the lazy ",&dx);
-		fontstash_draw_text(stash, styleN24, dx,dy,"dog.",&dx);
+		fonsSetFont(fs, fontItalic);
+		fonsDrawText(fs, dx,dy,"jumps over ",&dx);
+		fonsSetFont(fs, fontBold);
+		fonsDrawText(fs, dx,dy,"the lazy ",&dx);
+		fonsSetFont(fs, fontNormal);
+		fonsDrawText(fs, dx,dy,"dog.",&dx);
 
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
-		fontstash_draw_text(stash, styleN12Blue, dx,dy,"Now is the time for all good men to come to the aid of the party.",&dx);
+		fonsSetSize(fs, 12.0f);
+		fonsSetFont(fs, fontNormal);
+		fonsSetColor(fs, blue);
+		fonsDrawText(fs, dx,dy,"Now is the time for all good men to come to the aid of the party.",&dx);
 
-		fontstash_vert_metrics(stash, styleN12Blue, NULL,NULL,&lh);
+		fonsVertMetrics(fs, NULL,NULL,&lh);
 		dx = sx;
 		dy += lh*1.2f*2;
 		dash(dx,dy);
-		fontstash_draw_text(stash, styleI18, dx,dy,"Ég get etið gler án þess að meiða mig.",&dx);
+		fonsSetSize(fs, 18.0f);
+		fonsSetFont(fs, fontItalic);
+		fonsSetColor(fs, white);
+		fonsDrawText(fs, dx,dy,"Ég get etið gler án þess að meiða mig.",&dx);
 
-		fontstash_vert_metrics(stash, styleI18, NULL,NULL,&lh);
+		fonsVertMetrics(fs, NULL,NULL,&lh);
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
-		fontstash_draw_text(stash, styleJp, dx,dy,"私はガラスを食べられます。それは私を傷つけません。",&dx);
+		fonsSetFont(fs, fontJapanese);
+		fonsDrawText(fs, dx,dy,"私はガラスを食べられます。それは私を傷つけません。asd",&dx);
 
-
-		glstash_draw(gl, stash);
-
-		
 		glEnable(GL_DEPTH_TEST);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
 
-	glstash_delete(gl);
-	fontstash_delete(stash);
+	fonsDelete(fs);
 
 	glfwTerminate();
 	return 0;
