@@ -24,6 +24,8 @@
 #define GLSTASH_IMPLEMENTATION
 #include "glstash.h"
 
+int debug = 0;
+
 void dash(float dx, float dy)
 {
 	glBegin(GL_LINES);
@@ -31,6 +33,23 @@ void dash(float dx, float dy)
 	glVertex2f(dx-5,dy);
 	glVertex2f(dx-10,dy);
 	glEnd();
+}
+
+void line(float sx, float sy, float ex, float ey)
+{
+	glBegin(GL_LINES);
+	glColor4ub(0,0,0,128);
+	glVertex2f(sx,sy);
+	glVertex2f(ex,ey);
+	glEnd();
+}
+
+static void key(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, GL_TRUE);
+	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+		debug = !debug;
 }
 
 int main()
@@ -56,6 +75,7 @@ int main()
 		return -1;
 	}
 
+    glfwSetKeyCallback(window, key);
 	glfwMakeContextCurrent(window);
 
 	memset(&params, 0, sizeof(params));
@@ -122,12 +142,15 @@ int main()
 		unsigned int white = glstRGBA(255,255,255,255);
 		unsigned int brown = glstRGBA(192,128,0,128);
 		unsigned int blue = glstRGBA(0,192,255,255);
+		unsigned int black = glstRGBA(0,0,0,255);
 
-		sx = 100; sy = 100;
+		sx = 50; sy = 50;
 		
 		dx = sx; dy = sy;
 
 		dash(dx,dy);
+
+		fonsClearState(fs);
 
 		fonsSetSize(fs, 124.0f);
 		fonsSetFont(fs, fontNormal);
@@ -184,7 +207,65 @@ int main()
 		dy += lh*1.2f;
 		dash(dx,dy);
 		fonsSetFont(fs, fontJapanese);
-		fonsDrawText(fs, dx,dy,"私はガラスを食べられます。それは私を傷つけません。asd",&dx);
+		fonsDrawText(fs, dx,dy,"私はガラスを食べられます。それは私を傷つけません。",&dx);
+
+		// Font alignment
+		fonsSetSize(fs, 18.0f);
+		fonsSetFont(fs, fontNormal);
+		fonsSetColor(fs, white);
+
+		dx = 50; dy = 350;
+		line(dx-10,dy,dx+250,dy);
+		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
+		fonsDrawText(fs, dx,dy,"Top",&dx);
+		dx += 10;
+		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_MIDDLE);
+		fonsDrawText(fs, dx,dy,"Middle",&dx);
+		dx += 10;
+		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_BASELINE);
+		fonsDrawText(fs, dx,dy,"Baseline",&dx);
+		dx += 10;
+		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_BOTTOM);
+		fonsDrawText(fs, dx,dy,"Bottom",&dx);
+
+		dx = 150; dy = 400;
+		line(dx,dy-30,dx,dy+80.0f);
+		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_BASELINE);
+		fonsDrawText(fs, dx,dy,"Left",NULL);
+		dy += 30;
+		fonsSetAlign(fs, FONS_ALIGN_CENTER | FONS_ALIGN_BASELINE);
+		fonsDrawText(fs, dx,dy,"Center",NULL);
+		dy += 30;
+		fonsSetAlign(fs, FONS_ALIGN_RIGHT | FONS_ALIGN_BASELINE);
+		fonsDrawText(fs, dx,dy,"Right",NULL);
+
+		// Blur
+		dx = 500; dy = 350;
+		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_BASELINE);
+
+		fonsSetSize(fs, 60.0f);
+		fonsSetFont(fs, fontItalic);
+		fonsSetColor(fs, white);
+		fonsSetSpacing(fs, 5.0f);
+		fonsSetBlur(fs, 10.0f);
+		fonsDrawText(fs, dx,dy,"Blurry...",NULL);
+
+		dy += 50.0f;
+
+		fonsSetSize(fs, 18.0f);
+		fonsSetFont(fs, fontBold);
+		fonsSetColor(fs, black);
+		fonsSetSpacing(fs, 0.0f);
+		fonsSetBlur(fs, 3.0f);
+		fonsDrawText(fs, dx,dy+2,"DROP THAT SHADOW",NULL);
+
+		fonsSetColor(fs, white);
+		fonsSetBlur(fs, 0);
+		fonsDrawText(fs, dx,dy,"DROP THAT SHADOW",NULL);
+
+		if (debug)
+			fonsDrawDebug(fs, 800.0, 50.0);
+
 
 		glEnable(GL_DEPTH_TEST);
 
