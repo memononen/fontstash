@@ -854,12 +854,12 @@ void fonsDrawText(struct FONScontext* stash,
 				fons__flush(stash);
 
 			fons__vertex(stash, q.x0, q.y0, q.s0, q.t0, state->color);
-			fons__vertex(stash, q.x1, q.y0, q.s1, q.t0, state->color);
 			fons__vertex(stash, q.x1, q.y1, q.s1, q.t1, state->color);
+			fons__vertex(stash, q.x1, q.y0, q.s1, q.t0, state->color);
 
 			fons__vertex(stash, q.x0, q.y0, q.s0, q.t0, state->color);
-			fons__vertex(stash, q.x1, q.y1, q.s1, q.t1, state->color);
 			fons__vertex(stash, q.x0, q.y1, q.s0, q.t1, state->color);
+			fons__vertex(stash, q.x1, q.y1, q.s1, q.t1, state->color);
 		}
 		prevGlyph = glyph;
 	}
@@ -875,12 +875,12 @@ void fonsDrawDebug(struct FONScontext* stash, float x, float y)
 		fons__flush(stash);
 
 	fons__vertex(stash, x+0, y+0, 0, 0, 0xffffffff);
-	fons__vertex(stash, x+w, y+0, 1, 0, 0xffffffff);
 	fons__vertex(stash, x+w, y+h, 1, 1, 0xffffffff);
+	fons__vertex(stash, x+w, y+0, 1, 0, 0xffffffff);
 
 	fons__vertex(stash, x+0, y+0, 0, 0, 0xffffffff);
-	fons__vertex(stash, x+w, y+h, 1, 1, 0xffffffff);
 	fons__vertex(stash, x+0, y+h, 0, 1, 0xffffffff);
+	fons__vertex(stash, x+w, y+h, 1, 1, 0xffffffff);
 }
 
 void fonsTextBounds(struct FONScontext* stash,
