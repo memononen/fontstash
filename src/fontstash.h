@@ -511,85 +511,66 @@ static struct FONSglyph* fons__allocGlyph(struct FONSfont* font)
 	return &font->glyphs[font->nglyphs-1];
 }
 
-static int fons__clamp(int a, int amin, int amax) { return a < amin ? amin : (a > amax ? amax : a); }
 
-static void fons__hblur(unsigned char* dst, int dstStride, unsigned char* src, int srcStride,
-						int w, int h, int blur, unsigned short* idx)
+// Based on Exponential blur, Jani Huhtanen, 2006
+
+#define APREC 16
+#define ZPREC 7
+
+static void fons__blurcols(unsigned char* dst, int w, int h, int dstStride, int alpha)
 {
-	int x,y,acc;
-	int d = 1 + 2*blur;
-	int w1 = w-1;
-	idx += blur;
-
-	for (x = -blur; x <= w+blur; x++) {
-		idx[x] = fons__clamp(x,0,w1);
-	}
-
-	for (y = 0; y < h; y++)	{
-		// warm up accumulator
-		acc = 0;
-		for (x = -blur; x < blur; x++)
-			acc += src[idx[x]];
-		for (x = 0; x < w; x++) {
-			acc += src[idx[x+blur]];
-			dst[x] = (unsigned char)(acc / d);
-			acc -= src[idx[x-blur]];
+	int x, y;
+	for (y = 0; y < h; y++) {
+		int z = 0; // force zero border
+		for (x = 1; x < w; x++) {
+			z += (alpha * (((int)(dst[x]) << ZPREC) - z)) >> APREC;
+			dst[x] = (unsigned char)(z >> ZPREC);
 		}
-		src += srcStride;
+		dst[w-1] = 0; // force zero border
+		z = 0;
+		for (x = w-2; x >= 0; x--) {
+			z += (alpha * (((int)(dst[x]) << ZPREC) - z)) >> APREC;
+			dst[x] = (unsigned char)(z >> ZPREC);
+		}
+		dst[0] = 0; // force zero border
 		dst += dstStride;
 	}
-
 }
 
-static void fons__vblur(unsigned char* dst, int dstStride, unsigned char* src, int srcStride,
-						int w, int h, int blur, unsigned short* idx)
+static void fons__blurrows(unsigned char* dst, int w, int h, int dstStride, int alpha)
 {
-	int x,y,acc;
-	int d = 1 + 2*blur;
-	int h1 = h-1;
-	idx += blur;
-
-	for (y = -blur; y <= h+blur; y++)
-		idx[y] = fons__clamp(y,0,h1) * srcStride;
-
-	for (x = 0; x < w; x++)	{
-		// warm up accumulator
-		acc = 0;
-		for (y = -blur; y < blur; y++)
-			acc += src[idx[y]];
-		for (y = 0; y < h; y++) {
-			acc += src[idx[y+blur]];
-			dst[y*dstStride] = (unsigned char)(acc / d);
-			acc -= src[idx[y-blur]];
+	int x, y;
+	for (x = 0; x < w; x++) {
+		int z = 0; // force zero border
+		for (y = dstStride; y < h*dstStride; y += dstStride) {
+			z += (alpha * (((int)(dst[y]) << ZPREC) - z)) >> APREC;
+			dst[y] = (unsigned char)(z >> ZPREC);
 		}
-		src++;
+		dst[(h-1)*dstStride] = 0; // force zero border
+		z = 0;
+		for (y = (h-2)*dstStride; y >= 0; y -= dstStride) {
+			z += (alpha * (((int)(dst[y]) << ZPREC) - z)) >> APREC;
+			dst[y] = (unsigned char)(z >> ZPREC);
+		}
+		dst[0] = 0; // force zero border
 		dst++;
 	}
 }
 
+
 static void fons__blur(struct FONScontext* stash, unsigned char* dst, int w, int h, int dstStride, int blur)
 {
-	// It is possible that our scratch is too small for blurring (16k scratch can handle about 120x120 blur).
-	int bufStride = w;
-	unsigned short* idx;
-	unsigned char* buf;
-	buf = (unsigned char*)fons__tmpalloc(w*h, stash);
-	if (buf == NULL) {
+	if (blur < 1)
 		return;
-	}
-	idx = (unsigned short*)fons__tmpalloc((1+2*blur+fons__maxi(w,h))*sizeof(unsigned short), stash);
-	if (idx == NULL) {
-		return;
-	}
-
-	// Tent.
-	int b1 = (blur+1)/2, b2 = blur-b1;
-	fons__hblur(buf,bufStride, dst,dstStride, w,h, b1, idx);
-	fons__vblur(dst,dstStride, buf,bufStride, w,h, b1, idx);
-	if (b2 > 0) {
-		fons__hblur(buf,bufStride, dst,dstStride, w,h, b2, idx);
-		fons__vblur(dst,dstStride, buf,bufStride, w,h, b2, idx);
-	}
+	// Calculate the alpha such that 90% of the kernel is within the radius. (Kernel extends to infinity)
+	float sigma = (float)blur * 0.57735f; // 1 / sqrt(3)
+	int alpha = (int)((1<<APREC) * (1.0f - expf(-2.3f / (sigma+1.0f))));
+	fons__blurrows(dst, w, h, dstStride, alpha);
+	fons__blurcols(dst, w, h, dstStride, alpha);
+	fons__blurrows(dst, w, h, dstStride, alpha);
+	fons__blurcols(dst, w, h, dstStride, alpha);
+//	fons__blurrows(dst, w, h, dstStride, alpha);
+//	fons__blurcols(dst, w, h, dstStride, alpha);
 }
 
 
