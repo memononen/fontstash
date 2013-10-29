@@ -140,11 +140,6 @@ struct FONSquad
 	float x1,y1,s1,t1;
 };
 
-struct FONSrow
-{
-	short x,y,h;
-};
-
 struct FONSglyph
 {
 	unsigned int codepoint;
@@ -180,16 +175,27 @@ struct FONSstate
 	float spacing;
 };
 
+struct FONSrow
+{
+	short x,y,h;
+};
+
+struct FONSatlas
+{
+	int width, height;
+	struct FONSrow* rows;
+	int crows;
+	int nrows;
+};
+
 struct FONScontext
 {
 	struct FONSparams params;
 	float itw,ith;
 	unsigned char* texData;
 	int dirtyRect[4];
-	struct FONSrow* rows;
-	int crows;
-	int nrows;
 	struct FONSfont** fonts;
+	struct FONSatlas* atlas;
 	int cfonts;
 	int nfonts;
 	float verts[FONS_VERTEX_COUNT*2];
@@ -256,6 +262,101 @@ static unsigned int fons__decutf8(unsigned int* state, unsigned int* codep, unsi
 	return *state;
 }
 
+static void fons__deleteAtlas(struct FONSatlas* atlas)
+{
+	if (atlas == NULL) return;
+	if (atlas->rows != NULL) free(atlas->rows);
+	free(atlas);
+}
+
+static struct FONSatlas* fons__allocAtlas(int w, int h, int rows)
+{
+	struct FONSatlas* atlas = NULL;
+
+	// Allocate memory for the font stash.
+	atlas = (struct FONSatlas*)malloc(sizeof(struct FONSatlas));
+	if (atlas == NULL) goto error;
+	memset(atlas, 0, sizeof(struct FONSatlas));
+
+	atlas->width = w;
+	atlas->height = h;
+
+	// Allocate space for rows
+	atlas->rows = (struct FONSrow*)malloc(sizeof(struct FONSrow) * rows);
+	if (atlas->rows == NULL) goto error;
+	memset(atlas->rows, 0, sizeof(struct FONSrow) * rows);
+	atlas->crows = rows;
+	atlas->nrows = 0;
+
+	return atlas;
+
+error:
+	if (atlas) fons__deleteAtlas(atlas);
+	return NULL;
+}
+
+static struct FONSrow* fons__atlasAllocRow(struct FONSatlas* atlas)
+{
+	struct FONSrow* rows = NULL;
+	if (atlas->nrows+1 > atlas->crows) {
+		atlas->crows *= 2;
+		rows = (struct FONSrow*)malloc(sizeof(struct FONSrow) * atlas->crows);
+		if (rows == NULL) return NULL;
+		memset(rows, 0, sizeof(struct FONSrow) * atlas->crows);
+		if (atlas->nrows > 0)
+			memcpy(rows, atlas->rows, sizeof(struct FONSrow) * atlas->nrows);
+		free(atlas->rows);
+		atlas->rows = rows;
+	}
+	atlas->nrows++;
+	return &atlas->rows[atlas->nrows-1];
+}
+
+static int fons__atlasAddRect(struct FONSatlas* atlas, int rw, int rh, int* rx, int* ry)
+{
+	int i, py;
+	struct FONSrow* br = NULL;
+
+	// Round row height
+	rh = (rh+7) & ~7;;
+	
+	// Find row where the glyph can be fit.
+	for (i = 0; i < atlas->nrows; ++i) {
+		int rmax = atlas->rows[i].h, rmin = rmax - rmax/4;
+		if (rh >= rmin && rh <= rmax && (atlas->rows[i].x+rw+1) <= atlas->width) {
+			br = &atlas->rows[i];
+			break;
+		}
+	}
+
+	// If no row found, add new.
+	if (br == NULL) {
+		py = 0;
+		// Check that there is enough space.
+		if (atlas->nrows > 0) {
+			py = atlas->rows[atlas->nrows-1].y + atlas->rows[atlas->nrows-1].h+1;
+			if (py+rh > atlas->height)
+				return 0;
+		}
+		// Init and add row
+		br = fons__atlasAllocRow(atlas);
+		if (br == NULL)
+			return 0;
+		br->x = 0;
+		br->y = py;
+		br->h = rh;
+	}
+
+	*rx = br->x;
+	*ry = br->y;
+
+	// Advance row location.
+	br->x += rw+1;
+
+	return 1;
+}
+
+
 struct FONScontext* fonsCreate(struct FONSparams* params)
 {
 	struct FONScontext* stash = NULL;
@@ -269,12 +370,8 @@ struct FONScontext* fonsCreate(struct FONSparams* params)
 
 	if (stash->params.renderCreate(stash->params.userPtr, stash->params.width, stash->params.height) == 0) goto error;
 
-	// Allocate space for rows
-	stash->rows = (struct FONSrow*)malloc(sizeof(struct FONSrow) * FONS_INIT_ROWS);
-	if (stash->rows == NULL) goto error;
-	memset(stash->rows, 0, sizeof(struct FONSrow) * FONS_INIT_ROWS);
-	stash->crows = FONS_INIT_ROWS;
-	stash->nrows = 0;
+	stash->atlas = fons__allocAtlas(stash->params.width, stash->params.height, FONS_INIT_ROWS);
+	if (stash->atlas == NULL) goto error;
 
 	// Allocate space for fonts.
 	stash->fonts = (struct FONSfont**)malloc(sizeof(struct FONSfont*) * FONS_INIT_FONTS);
@@ -366,8 +463,6 @@ void fonsClearState(struct FONScontext* stash)
 	state->spacing = 0;
 	state->align = FONS_ALIGN_LEFT | FONS_ALIGN_BASELINE;
 }
-
-
 
 int fonsAddFont(struct FONScontext* stash, const char* path)
 {
@@ -477,23 +572,6 @@ error:
 	return FONS_INVALID;
 }
 
-static struct FONSrow* fons__allocRow(struct FONScontext* stash)
-{
-	struct FONSrow* rows = NULL;
-	if (stash->nrows+1 > stash->crows) {
-		stash->crows *= 2;
-		rows = (struct FONSrow*)malloc(sizeof(struct FONSrow) * stash->crows);
-		if (rows == NULL) return NULL;
-		memset(rows, 0, sizeof(struct FONSrow) * stash->crows);
-		if (stash->nrows > 0)
-			memcpy(rows, stash->rows, sizeof(struct FONSrow) * stash->nrows);
-		free(stash->rows);
-		stash->rows = rows;
-	}
-	stash->nrows++;
-	return &stash->rows[stash->nrows-1];
-}
-
 static struct FONSglyph* fons__allocGlyph(struct FONSfont* font)
 {
 	struct FONSglyph* glyphs = NULL;
@@ -517,7 +595,7 @@ static struct FONSglyph* fons__allocGlyph(struct FONSfont* font)
 #define APREC 16
 #define ZPREC 7
 
-static void fons__blurcols(unsigned char* dst, int w, int h, int dstStride, int alpha)
+static void fons__blurCols(unsigned char* dst, int w, int h, int dstStride, int alpha)
 {
 	int x, y;
 	for (y = 0; y < h; y++) {
@@ -537,7 +615,7 @@ static void fons__blurcols(unsigned char* dst, int w, int h, int dstStride, int 
 	}
 }
 
-static void fons__blurrows(unsigned char* dst, int w, int h, int dstStride, int alpha)
+static void fons__blurRows(unsigned char* dst, int w, int h, int dstStride, int alpha)
 {
 	int x, y;
 	for (x = 0; x < w; x++) {
@@ -565,25 +643,23 @@ static void fons__blur(struct FONScontext* stash, unsigned char* dst, int w, int
 	// Calculate the alpha such that 90% of the kernel is within the radius. (Kernel extends to infinity)
 	float sigma = (float)blur * 0.57735f; // 1 / sqrt(3)
 	int alpha = (int)((1<<APREC) * (1.0f - expf(-2.3f / (sigma+1.0f))));
-	fons__blurrows(dst, w, h, dstStride, alpha);
-	fons__blurcols(dst, w, h, dstStride, alpha);
-	fons__blurrows(dst, w, h, dstStride, alpha);
-	fons__blurcols(dst, w, h, dstStride, alpha);
+	fons__blurRows(dst, w, h, dstStride, alpha);
+	fons__blurCols(dst, w, h, dstStride, alpha);
+	fons__blurRows(dst, w, h, dstStride, alpha);
+	fons__blurCols(dst, w, h, dstStride, alpha);
 //	fons__blurrows(dst, w, h, dstStride, alpha);
 //	fons__blurcols(dst, w, h, dstStride, alpha);
 }
 
-
 static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfont* font, unsigned int codepoint,
 										short isize, short iblur)
 {
-	int i, g, advance, lsb, x0, y0, x1, y1, gw, gh;
+	int i, g, advance, lsb, x0, y0, x1, y1, gw, gh, gx, gy;
 	float scale;
 	struct FONSglyph* glyph = NULL;
 	unsigned int h;
 	float size = isize/10.0f;
-	int rh, pad;
-	struct FONSrow* br;
+	int pad;
 
 	if (isize < 2) return NULL;
 	if (iblur > 20) iblur = 20;
@@ -609,34 +685,9 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 	gw = x1-x0 + pad*2;
 	gh = y1-y0 + pad*2;
 
-	// Find row where the glyph can be fit.
-	br = NULL;
-	rh = (gh+7) & ~7;
-	for (i = 0; i < stash->nrows; ++i) {
-		int rmax = stash->rows[i].h, rmin = rmax - rmax/4;
-		if (rh >= rmin && rh <= rmax && (stash->rows[i].x+gw+1) <= stash->params.width) {
-			br = &stash->rows[i];
-			break;
-		}
-	}
-
-	// If no row found, add new.
-	if (br == NULL) {
-		short py = 0;
-		// Check that there is enough space.
-		if (stash->nrows > 0) {
-			py = stash->rows[stash->nrows-1].y + stash->rows[stash->nrows-1].h+1;
-			if (py+rh > stash->params.height)
-				return NULL;
-		}
-		// Init and add row
-		br = fons__allocRow(stash);
-		if (br == NULL)
-			return NULL;
-		br->x = 0;
-		br->y = py;
-		br->h = rh;
-	}
+	// Find free spot for the rect in the atlas
+	if (fons__atlasAddRect(stash->atlas, gw, gh, &gx, &gy) == 0)
+		return NULL;
 
 	// Init glyph.
 	glyph = fons__allocGlyph(font);
@@ -644,17 +695,14 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 	glyph->size = isize;
 	glyph->blur = iblur;
 	glyph->index = g;
-	glyph->x0 = br->x;
-	glyph->y0 = br->y;
+	glyph->x0 = gx;
+	glyph->y0 = gy;
 	glyph->x1 = glyph->x0+gw;
 	glyph->y1 = glyph->y0+gh;
 	glyph->xadv = (short)(scale * advance * 10.0f);
 	glyph->xoff = x0 - pad;
 	glyph->yoff = y0 - pad;
 	glyph->next = 0;
-
-	// Advance row location.
-	br->x += gw+1;
 
 	// Insert char to hash lookup.
 	glyph->next = font->lut[h];
@@ -958,8 +1006,8 @@ void fonsDelete(struct FONScontext* stash)
 	for (i = 0; i < stash->nfonts; ++i)
 		fons__freeFont(stash->fonts[i]);
 
+	if (stash->atlas) fons__deleteAtlas(stash->atlas);
 	if (stash->fonts) free(stash->fonts);
-	if (stash->rows) free(stash->rows);
 	if (stash->texData) free(stash->texData);
 	free(stash);
 }
