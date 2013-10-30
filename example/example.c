@@ -58,7 +58,6 @@ int main()
 	int fontItalic = FONS_INVALID;
 	int fontBold = FONS_INVALID;
 	int fontJapanese = FONS_INVALID;
-
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
 	
@@ -119,6 +118,7 @@ int main()
 	{
 		float sx, sy, dx, dy, lh = 0;
 		int width, height;
+		unsigned int white,black,brown,blue;
 		glfwGetFramebufferSize(window, &width, &height);
 		// Update and render
 		glViewport(0, 0, width, height);
@@ -139,11 +139,10 @@ int main()
 		glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 		glEnable(GL_CULL_FACE);
 
-
-		unsigned int white = glstRGBA(255,255,255,255);
-		unsigned int brown = glstRGBA(192,128,0,128);
-		unsigned int blue = glstRGBA(0,192,255,255);
-		unsigned int black = glstRGBA(0,0,0,255);
+		white = glstRGBA(255,255,255,255);
+		brown = glstRGBA(192,128,0,128);
+		blue = glstRGBA(0,192,255,255);
+		black = glstRGBA(0,0,0,255);
 
 		sx = 50; sy = 50;
 		

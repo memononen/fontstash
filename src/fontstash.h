@@ -210,10 +210,12 @@ struct FONScontext
 
 static void* fons__tmpalloc(size_t size, void* up)
 {
+	unsigned char* ptr;
+
 	struct FONScontext* stash = (struct FONScontext*)up;
 	if (stash->nscratch+(int)size > FONS_SCRATCH_BUF_SIZE)
 		return NULL;
-	unsigned char* ptr = stash->scratch + stash->nscratch;
+	ptr = stash->scratch + stash->nscratch;
 	stash->nscratch += (int)size;
 	return ptr;
 }
@@ -638,11 +640,14 @@ static void fons__blurRows(unsigned char* dst, int w, int h, int dstStride, int 
 
 static void fons__blur(struct FONScontext* stash, unsigned char* dst, int w, int h, int dstStride, int blur)
 {
+	int alpha;
+	float sigma;
+
 	if (blur < 1)
 		return;
 	// Calculate the alpha such that 90% of the kernel is within the radius. (Kernel extends to infinity)
-	float sigma = (float)blur * 0.57735f; // 1 / sqrt(3)
-	int alpha = (int)((1<<APREC) * (1.0f - expf(-2.3f / (sigma+1.0f))));
+	sigma = (float)blur * 0.57735f; // 1 / sqrt(3)
+	alpha = (int)((1<<APREC) * (1.0f - expf(-2.3f / (sigma+1.0f))));
 	fons__blurRows(dst, w, h, dstStride, alpha);
 	fons__blurCols(dst, w, h, dstStride, alpha);
 	fons__blurRows(dst, w, h, dstStride, alpha);
@@ -660,6 +665,8 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 	unsigned int h;
 	float size = isize/10.0f;
 	int pad;
+	unsigned char* bdst;
+	unsigned char* dst;
 
 	if (isize < 2) return NULL;
 	if (iblur > 20) iblur = 20;
@@ -709,7 +716,7 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 	font->lut[h] = font->nglyphs-1;
 
 	// Rasterize
-	unsigned char* dst = &stash->texData[(glyph->x0+pad) + (glyph->y0+pad) * stash->params.width];
+	dst = &stash->texData[(glyph->x0+pad) + (glyph->y0+pad) * stash->params.width];
 	stbtt_MakeGlyphBitmap(&font->font, dst, gw-pad*2,gh-pad*2, stash->params.width, scale,scale, g);
 
 	/*
@@ -728,7 +735,7 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 	// Blur
 	if (iblur > 0) {
 		stash->nscratch = 0;
-		unsigned char* bdst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
+		bdst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
 		fons__blur(stash, bdst, gw,gh, stash->params.width, iblur);
 	}
 
@@ -800,7 +807,7 @@ static void fons__flush(struct FONScontext* stash)
 	}
 }
 
-static inline void fons__vertex(struct FONScontext* stash, float x, float y, float s, float t, unsigned int c)
+static __inline void fons__vertex(struct FONScontext* stash, float x, float y, float s, float t, unsigned int c)
 {
 	stash->verts[stash->nverts*2+0] = x;
 	stash->verts[stash->nverts*2+1] = y;
@@ -850,6 +857,7 @@ void fonsDrawText(struct FONScontext* stash,
 	short iblur = (short)state->blur;
 	float scale;
 	struct FONSfont* font;
+	float width;
 
 	if (stash == NULL) return;
 	if (state->font < 0 || state->font >= stash->nfonts) return;
@@ -858,7 +866,6 @@ void fonsDrawText(struct FONScontext* stash,
 
 	scale = stbtt_ScaleForPixelHeight(&font->font, (float)isize/10.0f);
 
-	float width;
 	// Align horizontally
 	if (state->align & FONS_ALIGN_LEFT) {
 		// empty
@@ -980,11 +987,14 @@ void fonsTextBounds(struct FONScontext* stash,
 void fonsVertMetrics(struct FONScontext* stash,
 					 float* ascender, float* descender, float* lineh)
 {
+	struct FONSfont* font;
 	struct FONSstate* state = fons__getState(stash);
+	short isize;
+
 	if (stash == NULL) return;
 	if (state->font < 0 || state->font >= stash->nfonts) return;
-	struct FONSfont* font = stash->fonts[state->font];
-	short isize = (short)(state->size*10.0f);
+	font = stash->fonts[state->font];
+	isize = (short)(state->size*10.0f);
 	if (!font->data) return;
 
 	if (ascender)
