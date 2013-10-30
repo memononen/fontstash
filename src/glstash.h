@@ -46,9 +46,10 @@ static int glst__renderCreate(void* userPtr, int width, int height)
 static void glst__renderUpdate(void* userPtr, int* rect, const unsigned char* data)
 {
 	struct GLSTcontext* gl = (struct GLSTcontext*)userPtr;
-	if (gl->tex == 0) return;
 	int w = rect[2] - rect[0];
 	int h = rect[3] - rect[1];
+
+	if (gl->tex == 0) return;
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
 	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, gl->width);
