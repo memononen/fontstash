@@ -11,33 +11,25 @@ The code is split in two parts, the font atlas and glyph quad generator [fontsta
 
 ## Example
 ``` C
-// Create stash for 512x512 texture, our coordinate system has zero at top-left.
-struct FONSparams params;
-memset(&params, 0, sizeof(params));
-params.width = 512;
-params.height = 512;
-params.flags = FONS_ZERO_TOPLEFT;
-glstInit(&params);
-struct FONScontext* fs = fonsCreate(&params);
+// Create GL stash for 512x512 texture, our coordinate system has zero at top-left.
+struct FONScontext* fs = glfonsCreate(512, 512, FONS_ZERO_TOPLEFT);
 
 // Add font to stash.
-int fontNormal = fonsAddFont(fs, "DroidSerif-Regular.ttf");
+int fontNormal = fonsAddFont(fs, "sans", "DroidSerif-Regular.ttf");
 
 // Render some text
 float dx = 10, dy = 10;
 unsigned int white = glstRGBA(255,255,255,255);
 unsigned int brown = glstRGBA(192,128,0,128);
 
-struct fontstash_style styleBig = { FONT_NORMAL, 124.0f, white };
-
 fonsSetFont(fs, fontNormal);
 fonsSetSize(fs, 124.0f);
 fonsSetColor(fs, white);
-fonsDrawText(fs, dx,dy,"The big ", &dx);
+fonsDrawText(fs, dx,dy,"The big ", NULL);
 
 fonsSetSize(fs, 24.0f);
 fonsSetColor(fs, brown);
-fonsDrawText(fs, dx,dy,"brown fox", &dx);
+fonsDrawText(fs, dx,dy,"brown fox", NULL);
 ```
 
 ## Using Font Stash in your project
@@ -54,15 +46,15 @@ In one C/C++ define FONTSTASH_IMPLEMENTATION before including the library to exp
 
 ``` C
 #include <GLFW/glfw3.h>				// Or any other GL header of your choice.
-#define GLSTASH_IMPLEMENTATION		// Expands implementation
-#include "glstash.h"
+#define GLFONTSTASH_IMPLEMENTATION	// Expands implementation
+#include "glfontstash.h"
 ```
 
 ## Creating new rendering backend
 
-The default rendering backend uses OpenGL to render the glyphs. If you want to render the text using some other API, or want tighter integration with your code base you can write your own rendering backend. Take a look at the [glstash.h](/src/glstash.h) for reference implementation.
+The default rendering backend uses OpenGL to render the glyphs. If you want to render the text using some other API, or want tighter integration with your code base you can write your own rendering backend. Take a look at the [glfontstash.h](/src/glfontstash.h) for reference implementation.
 
-The rendering interface FontStash assumes access to is defined in the FONSparams structure. The call to `glstInit()` fills in variables.
+The rendering interface FontStash assumes access to is defined in the FONSparams structure. The renderer initialization function is assumed to fill in the FONSparams structure and call fonsCreateInternal to create the FontStash context.
 
 ```C
 struct FONSparams {

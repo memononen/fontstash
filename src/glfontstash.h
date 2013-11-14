@@ -15,24 +15,26 @@
 //    misrepresented as being the original software.
 // 3. This notice may not be removed or altered from any source distribution.
 //
-#ifndef GLSTASH_H
-#define GLSTASH_H
+#ifndef GLFONTSTASH_H
+#define GLFONTSTASH_H
 
-int glstInit(struct FONSparams* params);
-unsigned int glstRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+struct FONScontext* glfonsCreate(int width, int height, int flags);
+void glfonsDelete(struct FONScontext* ctx);
+
+unsigned int glfonsRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 
 #endif
 
-#ifdef GLSTASH_IMPLEMENTATION
+#ifdef GLFONTSTASH_IMPLEMENTATION
 
-struct GLSTcontext {
+struct GLFONScontext {
 	GLuint tex;
 	int width, height;
 };
 
-static int glst__renderCreate(void* userPtr, int width, int height)
+static int glfons__renderCreate(void* userPtr, int width, int height)
 {
-	struct GLSTcontext* gl = (struct GLSTcontext*)userPtr;
+	struct GLFONScontext* gl = (struct GLFONScontext*)userPtr;
 	glGenTextures(1, &gl->tex);
 	if (!gl->tex) return 0;
 	gl->width = width;
@@ -43,9 +45,9 @@ static int glst__renderCreate(void* userPtr, int width, int height)
 	return 1;
 }
 
-static void glst__renderUpdate(void* userPtr, int* rect, const unsigned char* data)
+static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* data)
 {
-	struct GLSTcontext* gl = (struct GLSTcontext*)userPtr;
+	struct GLFONScontext* gl = (struct GLFONScontext*)userPtr;
 	int w = rect[2] - rect[0];
 	int h = rect[3] - rect[1];
 
@@ -58,9 +60,9 @@ static void glst__renderUpdate(void* userPtr, int* rect, const unsigned char* da
 	glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_ALPHA,GL_UNSIGNED_BYTE, data);
 }
 
-static void glst__renderDraw(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts)
+static void glfons__renderDraw(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts)
 {
-	struct GLSTcontext* gl = (struct GLSTcontext*)userPtr;
+	struct GLFONScontext* gl = (struct GLFONScontext*)userPtr;
 	if (gl->tex == 0) return;
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
 	glEnable(GL_TEXTURE_2D);
@@ -80,9 +82,9 @@ static void glst__renderDraw(void* userPtr, const float* verts, const float* tco
 	glDisableClientState(GL_COLOR_ARRAY);
 }
 
-static void glst__renderDelete(void* userPtr)
+static void glfons__renderDelete(void* userPtr)
 {
-	struct GLSTcontext* gl = (struct GLSTcontext*)userPtr;
+	struct GLFONScontext* gl = (struct GLFONScontext*)userPtr;
 	if (gl->tex)
 		glDeleteTextures(1, &gl->tex);
 	gl->tex = 0;
@@ -90,26 +92,38 @@ static void glst__renderDelete(void* userPtr)
 }
 
 
-int glstInit(struct FONSparams* params)
+struct FONScontext* glfonsCreate(int width, int height, int flags)
 {
-	struct GLSTcontext* gl = (struct GLSTcontext*)malloc(sizeof(struct GLSTcontext));
+	struct FONSparams params;
+	struct GLFONScontext* gl;
+
+	gl = (struct GLFONScontext*)malloc(sizeof(struct GLFONScontext));
 	if (gl == NULL) goto error;
-	memset(gl, 0, sizeof(struct GLSTcontext));
+	memset(gl, 0, sizeof(struct GLFONScontext));
 
-	params->renderCreate = glst__renderCreate;
-	params->renderUpdate = glst__renderUpdate;
-	params->renderDraw = glst__renderDraw; 
-	params->renderDelete = glst__renderDelete;
-	params->userPtr = gl;
+	memset(&params, 0, sizeof(params));
+	params.width = width;
+	params.height = height;
+	params.flags = flags;
+	params.renderCreate = glfons__renderCreate;
+	params.renderUpdate = glfons__renderUpdate;
+	params.renderDraw = glfons__renderDraw; 
+	params.renderDelete = glfons__renderDelete;
+	params.userPtr = gl;
 
-	return 1;
+	return fonsCreateInternal(&params);
 
 error:
 	if (gl != NULL) free(gl);
-	return 0;
+	return NULL;
 }
 
-unsigned int glstRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+void glfonsDelete(struct FONScontext* ctx)
+{
+	fonsDeleteInternal(ctx);
+}
+
+unsigned int glfonsRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
 	return (r) | (g << 8) | (b << 16) | (a << 24);
 }

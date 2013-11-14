@@ -21,8 +21,8 @@
 #define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
 #include <GLFW/glfw3.h>
-#define GLSTASH_IMPLEMENTATION
-#include "glstash.h"
+#define GLFONTSTASH_IMPLEMENTATION
+#include "glfontstash.h"
 
 int debug = 0;
 
@@ -61,7 +61,6 @@ int main()
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
 	
-	struct FONSparams params;
 	struct FONScontext* fs = NULL;
 
 	if (!glfwInit())
@@ -77,38 +76,28 @@ int main()
     glfwSetKeyCallback(window, key);
 	glfwMakeContextCurrent(window);
 
-	memset(&params, 0, sizeof(params));
-	params.width = 512;
-	params.height = 512;
-	params.flags = FONS_ZERO_TOPLEFT;
-
-	if (glstInit(&params) == 0) {
-		printf("Could not create renderer.\n");
-		return -1;
-	}
-
-	fs = fonsCreate(&params);
+	fs = glfonsCreate(512, 512, FONS_ZERO_TOPLEFT);
 	if (fs == NULL) {
 		printf("Could not create stash.\n");
 		return -1;
 	}
 
-	fontNormal = fonsAddFont(fs, "../example/DroidSerif-Regular.ttf");
+	fontNormal = fonsAddFont(fs, "sans", "../example/DroidSerif-Regular.ttf");
 	if (fontNormal == FONS_INVALID) {
 		printf("Could not add font normal.\n");
 		return -1;
 	}
-	fontItalic = fonsAddFont(fs, "../example/DroidSerif-Italic.ttf");
+	fontItalic = fonsAddFont(fs, "sans-italic", "../example/DroidSerif-Italic.ttf");
 	if (fontItalic == FONS_INVALID) {
 		printf("Could not add font italic.\n");
 		return -1;
 	}
-	fontBold = fonsAddFont(fs, "../example/DroidSerif-Bold.ttf");
+	fontBold = fonsAddFont(fs, "sans-bold", "../example/DroidSerif-Bold.ttf");
 	if (fontBold == FONS_INVALID) {
 		printf("Could not add font bold.\n");
 		return -1;
 	}
-	fontJapanese = fonsAddFont(fs, "../example/DroidSansJapanese.ttf");
+	fontJapanese = fonsAddFont(fs, "sans-jp", "../example/DroidSansJapanese.ttf");
 	if (fontJapanese == FONS_INVALID) {
 		printf("Could not add font japanese.\n");
 		return -1;
@@ -139,10 +128,10 @@ int main()
 		glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 		glEnable(GL_CULL_FACE);
 
-		white = glstRGBA(255,255,255,255);
-		brown = glstRGBA(192,128,0,128);
-		blue = glstRGBA(0,192,255,255);
-		black = glstRGBA(0,0,0,255);
+		white = glfonsRGBA(255,255,255,255);
+		brown = glfonsRGBA(192,128,0,128);
+		blue = glfonsRGBA(0,192,255,255);
+		black = glfonsRGBA(0,0,0,255);
 
 		sx = 50; sy = 50;
 		
@@ -162,28 +151,28 @@ int main()
 		fonsSetSize(fs, 124.0f);
 		fonsSetFont(fs, fontNormal);
 		fonsSetColor(fs, white);
-		fonsDrawText(fs, dx,dy,"The quick ",&dx);
+		dx = fonsDrawText(fs, dx,dy,"The quick ",NULL);
 
 		fonsSetSize(fs, 48.0f);
 		fonsSetFont(fs, fontItalic);
 		fonsSetColor(fs, brown);
-		fonsDrawText(fs, dx,dy,"brown ",&dx);
+		dx = fonsDrawText(fs, dx,dy,"brown ",NULL);
 
 		fonsSetSize(fs, 24.0f);
 		fonsSetFont(fs, fontNormal);
 		fonsSetColor(fs, white);
-		fonsDrawText(fs, dx,dy,"fox ",&dx);
+		dx = fonsDrawText(fs, dx,dy,"fox ",NULL);
 
 		fonsVertMetrics(fs, NULL, NULL, &lh);
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
 		fonsSetFont(fs, fontItalic);
-		fonsDrawText(fs, dx,dy,"jumps over ",&dx);
+		dx = fonsDrawText(fs, dx,dy,"jumps over ",NULL);
 		fonsSetFont(fs, fontBold);
-		fonsDrawText(fs, dx,dy,"the lazy ",&dx);
+		dx = fonsDrawText(fs, dx,dy,"the lazy ",NULL);
 		fonsSetFont(fs, fontNormal);
-		fonsDrawText(fs, dx,dy,"dog.",&dx);
+		dx = fonsDrawText(fs, dx,dy,"dog.",NULL);
 
 		dx = sx;
 		dy += lh*1.2f;
@@ -191,7 +180,7 @@ int main()
 		fonsSetSize(fs, 12.0f);
 		fonsSetFont(fs, fontNormal);
 		fonsSetColor(fs, blue);
-		fonsDrawText(fs, dx,dy,"Now is the time for all good men to come to the aid of the party.",&dx);
+		fonsDrawText(fs, dx,dy,"Now is the time for all good men to come to the aid of the party.",NULL);
 
 		fonsVertMetrics(fs, NULL,NULL,&lh);
 		dx = sx;
@@ -200,14 +189,14 @@ int main()
 		fonsSetSize(fs, 18.0f);
 		fonsSetFont(fs, fontItalic);
 		fonsSetColor(fs, white);
-		fonsDrawText(fs, dx,dy,"Ég get etið gler án þess að meiða mig.",&dx);
+		fonsDrawText(fs, dx,dy,"Ég get etið gler án þess að meiða mig.",NULL);
 
 		fonsVertMetrics(fs, NULL,NULL,&lh);
 		dx = sx;
 		dy += lh*1.2f;
 		dash(dx,dy);
 		fonsSetFont(fs, fontJapanese);
-		fonsDrawText(fs, dx,dy,"私はガラスを食べられます。それは私を傷つけません。",&dx);
+		fonsDrawText(fs, dx,dy,"私はガラスを食べられます。それは私を傷つけません。",NULL);
 
 		// Font alignment
 		fonsSetSize(fs, 18.0f);
@@ -217,16 +206,16 @@ int main()
 		dx = 50; dy = 350;
 		line(dx-10,dy,dx+250,dy);
 		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
-		fonsDrawText(fs, dx,dy,"Top",&dx);
+		dx = fonsDrawText(fs, dx,dy,"Top",NULL);
 		dx += 10;
 		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_MIDDLE);
-		fonsDrawText(fs, dx,dy,"Middle",&dx);
+		dx = fonsDrawText(fs, dx,dy,"Middle",NULL);
 		dx += 10;
 		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_BASELINE);
-		fonsDrawText(fs, dx,dy,"Baseline",&dx);
+		dx = fonsDrawText(fs, dx,dy,"Baseline",NULL);
 		dx += 10;
 		fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_BOTTOM);
-		fonsDrawText(fs, dx,dy,"Bottom",&dx);
+		fonsDrawText(fs, dx,dy,"Bottom",NULL);
 
 		dx = 150; dy = 400;
 		line(dx,dy-30,dx,dy+80.0f);
@@ -273,7 +262,7 @@ int main()
 		glfwPollEvents();
 	}
 
-	fonsDelete(fs);
+	glfonsDelete(fs);
 
 	glfwTerminate();
 	return 0;
