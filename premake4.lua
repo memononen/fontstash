@@ -17,6 +17,7 @@ solution "fontstash"
 			 links { "X11","Xrandr", "rt", "GL", "GLU", "pthread" }
 
 		configuration { "windows" }
+			defines { "_CRT_SECURE_NO_WARNINGS" }
 			 links { "glu32","opengl32", "gdi32", "winmm", "user32" }
 
 		configuration { "macosx" }
