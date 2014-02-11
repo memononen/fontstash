@@ -46,6 +46,8 @@ void line(float sx, float sy, float ex, float ey)
 
 static void key(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+	(void)scancode;
+	(void)mods;
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, GL_TRUE);
 	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)

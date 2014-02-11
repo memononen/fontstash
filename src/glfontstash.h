@@ -35,6 +35,7 @@ struct GLFONScontext {
 static int glfons__renderCreate(void* userPtr, int width, int height)
 {
 	struct GLFONScontext* gl = (struct GLFONScontext*)userPtr;
+	(void)height;
 	glGenTextures(1, &gl->tex);
 	if (!gl->tex) return 0;
 	gl->width = width;
@@ -104,7 +105,7 @@ struct FONScontext* glfonsCreate(int width, int height, int flags)
 	memset(&params, 0, sizeof(params));
 	params.width = width;
 	params.height = height;
-	params.flags = flags;
+	params.flags = (unsigned char)flags;
 	params.renderCreate = glfons__renderCreate;
 	params.renderUpdate = glfons__renderUpdate;
 	params.renderDraw = glfons__renderDraw; 
