@@ -19,6 +19,9 @@
 #include <stdio.h>
 #include <string.h>
 #define FONTSTASH_IMPLEMENTATION
+
+//#define FONS_USE_FREETYPE
+
 #include "fontstash.h"
 #include <GLFW/glfw3.h>
 #define GLFONTSTASH_IMPLEMENTATION
