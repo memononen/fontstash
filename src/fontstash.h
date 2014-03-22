@@ -86,7 +86,7 @@ void fonsGetAtlasSize(struct FONScontext* s, int* width, int* height);
 // Expands the atlas size. 
 int fonsExpandAtlas(struct FONScontext* s, int width, int height);
 // Reseta the whole stash.
-int fonsReset(struct FONScontext* stash, int width, int height);
+int fonsResetAtlas(struct FONScontext* stash, int width, int height);
 
 // Add fonts
 int fonsAddFont(struct FONScontext* s, const char* name, const char* path);
@@ -1571,7 +1571,7 @@ int fonsExpandAtlas(struct FONScontext* stash, int width, int height)
 	return 1;
 }
 
-int fonsReset(struct FONScontext* stash, int width, int height)
+int fonsResetAtlas(struct FONScontext* stash, int width, int height)
 {
 	int i, j;
 	if (stash == NULL) return 0;

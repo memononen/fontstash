@@ -62,7 +62,7 @@ static void expandAtlas(struct FONScontext* stash)
 
 static void resetAtlas(struct FONScontext* stash)
 {
-	fonsReset(stash, 256,256);
+	fonsResetAtlas(stash, 256,256);
 	printf("reset atlas to 256 x 256\n");
 }
 
