@@ -35,15 +35,25 @@ struct GLFONScontext {
 static int glfons__renderCreate(void* userPtr, int width, int height)
 {
 	struct GLFONScontext* gl = (struct GLFONScontext*)userPtr;
-	(void)height;
+	// Create may be called multiple times, delete existing texture.
+	if (gl->tex != 0) {
+		glDeleteTextures(1, &gl->tex);
+		gl->tex = 0;
+	}
 	glGenTextures(1, &gl->tex);
 	if (!gl->tex) return 0;
 	gl->width = width;
-	gl->height = width;
+	gl->height = height;
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, gl->width, gl->height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	return 1;
+}
+
+static int glfons__renderResize(void* userPtr, int width, int height)
+{
+	// Reuse create to resize too.
+	return glfons__renderCreate(userPtr, width, height);
 }
 
 static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* data)
@@ -86,7 +96,7 @@ static void glfons__renderDraw(void* userPtr, const float* verts, const float* t
 static void glfons__renderDelete(void* userPtr)
 {
 	struct GLFONScontext* gl = (struct GLFONScontext*)userPtr;
-	if (gl->tex)
+	if (gl->tex != 0)
 		glDeleteTextures(1, &gl->tex);
 	gl->tex = 0;
 	free(gl);
@@ -107,6 +117,7 @@ struct FONScontext* glfonsCreate(int width, int height, int flags)
 	params.height = height;
 	params.flags = (unsigned char)flags;
 	params.renderCreate = glfons__renderCreate;
+	params.renderResize = glfons__renderResize;
 	params.renderUpdate = glfons__renderUpdate;
 	params.renderDraw = glfons__renderDraw; 
 	params.renderDelete = glfons__renderDelete;

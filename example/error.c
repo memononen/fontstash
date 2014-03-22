@@ -27,7 +27,7 @@
 #define GLFONTSTASH_IMPLEMENTATION
 #include "glfontstash.h"
 
-int debug = 0;
+struct FONScontext* fs = NULL;
 int size = 90;
 
 void dash(float dx, float dy)
@@ -48,14 +48,37 @@ void line(float sx, float sy, float ex, float ey)
 	glEnd();
 }
 
+static void expandAtlas(struct FONScontext* stash)
+{
+	int w = 0, h = 0;
+	fonsGetAtlasSize(stash, &w, &h);
+	if (w < h)
+		w *= 2;
+	else
+		h *= 2;
+	fonsExpandAtlas(stash, w, h);
+	printf("expanded atlas to %d x %d\n", w, h);
+}
+
+static void resetAtlas(struct FONScontext* stash)
+{
+	fonsReset(stash, 256,256);
+	printf("reset atlas to 256 x 256\n");
+}
+
 static void key(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	(void)scancode;
 	(void)mods;
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, GL_TRUE);
-	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
-		debug = !debug;
+
+	if (key == GLFW_KEY_E && action == GLFW_PRESS)
+		expandAtlas(fs);
+
+	if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+		resetAtlas(fs);
+	}
 
 	if (key == 265 && action == GLFW_PRESS) {
 		size += 10;
@@ -69,10 +92,11 @@ static void key(GLFWwindow* window, int key, int scancode, int action, int mods)
 void stashError(void* uptr, int error, int val)
 {
 	(void)uptr;
-//	struct FONScontext* fs = (struct FONScontext*)uptr;
+	struct FONScontext* stash = (struct FONScontext*)uptr;
 	switch (error) {
 	case FONS_ATLAS_FULL:
 		printf("atlas full\n");
+		expandAtlas(stash);
 		break;
 	case FONS_SCRATCH_FULL:
 		printf("scratch full, tried to allocate %d has %d\n", val, FONS_SCRATCH_BUF_SIZE);
@@ -95,8 +119,6 @@ int main()
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
 	
-	struct FONScontext* fs = NULL;
-
 	if (!glfwInit())
 		return -1;
 
@@ -143,7 +165,9 @@ int main()
 	{
 		float sx, sy, dx, dy, lh = 0;
 		int width, height;
+		int atlasw, atlash;
 		unsigned int white,black,brown,blue;
+		char msg[64];
 		glfwGetFramebufferSize(window, &width, &height);
 		// Update and render
 		glViewport(0, 0, width, height);
@@ -202,10 +226,13 @@ int main()
 		fonsSetSize(fs, 14);
 		fonsSetFont(fs, fontNormal);
 		fonsSetColor(fs, white);
-		dx = fonsDrawText(fs, 20, height-20,"Press UP / DOWN keys to change font size and to trigger atlas full callback.",NULL);
+		fonsDrawText(fs, 20, height-20,"Press UP / DOWN keys to change font size and to trigger atlas full callback, R to reset atlas, E to expand atlas.",NULL);
 
-//		if (debug)
-			fonsDrawDebug(fs, 800.0, 50.0);
+		fonsGetAtlasSize(fs, &atlasw, &atlash);
+		snprintf(msg, sizeof(msg), "Atlas: %d × %d", atlasw, atlash);
+		fonsDrawText(fs, 20, height-50, msg, NULL);
+
+		fonsDrawDebug(fs, width - atlasw - 20, 20.0);
 
 		glEnable(GL_DEPTH_TEST);
 

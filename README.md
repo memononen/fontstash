@@ -61,6 +61,7 @@ struct FONSparams {
 	...
 	void* userPtr;
 	int (*renderCreate)(void* uptr, int width, int height);
+	int (*renderResize)(void* uptr, int width, int height);
 	void (*renderUpdate)(void* uptr, int* rect, const unsigned char* data);
 	void (*renderDraw)(void* uptr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts);
 	void (*renderDelete)(void* uptr);
@@ -68,6 +69,8 @@ struct FONSparams {
 ```
 
 - **renderCreate** is called to create renderer for specific API, this is where you should create a texture of given size.
+	- return 1 of success, or 0 on failure.
+- **renderResize** is called to resize the texture. Called when user explicitly expands or resets the atlas texture.
 	- return 1 of success, or 0 on failure.
 - **renderUpdate** is called to update texture data
 	- _rect_ describes the region of the texture that has changed
