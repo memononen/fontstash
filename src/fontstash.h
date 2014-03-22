@@ -1214,6 +1214,9 @@ float fonsDrawText(struct FONScontext* stash,
 
 	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
 
+	if (end == NULL)
+		end = str + strlen(str);
+
 	// Align horizontally
 	if (state->align & FONS_ALIGN_LEFT) {
 		// empty
@@ -1227,10 +1230,7 @@ float fonsDrawText(struct FONScontext* stash,
 	// Align vertically.
 	y += fons__getVertAlign(stash, font, state->align, isize);
 
-	if (end == NULL)
-		end = str + strlen(str);
-
-	for (; *str; ++str) {
+	for (; str != end; ++str) {
 		if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char*)str))
 			continue;
 		glyph = fons__getGlyph(stash, font, codepoint, isize, iblur);
@@ -1402,7 +1402,7 @@ float fonsTextBounds(struct FONScontext* stash,
 	if (end == NULL)
 		end = str + strlen(str);
 
-	for (; *str; ++str) {
+	for (; str != end; ++str) {
 		if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char*)str))
 			continue;
 		glyph = fons__getGlyph(stash, font, codepoint, isize, iblur);
