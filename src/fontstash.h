@@ -987,7 +987,7 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 	struct FONSglyph* glyph = NULL;
 	unsigned int h;
 	float size = isize/10.0f;
-	int pad;
+	int pad, added;
 	unsigned char* bdst;
 	unsigned char* dst;
 
@@ -1015,15 +1015,13 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 	gh = y1-y0 + pad*2;
 
 	// Find free spot for the rect in the atlas
-	if (fons__atlasAddRect(stash->atlas, gw, gh, &gx, &gy) == 0) {
-		// Atlas is full
-		if (stash->handleError) {
-			// Handle error, and try again.
-			stash->handleError(stash->errorUptr, FONS_ATLAS_FULL, 0);
-			if (fons__atlasAddRect(stash->atlas, gw, gh, &gx, &gy) == 0)
-				return NULL;
-		}
+	added = fons__atlasAddRect(stash->atlas, gw, gh, &gx, &gy);
+	if (added == 0 && stash->handleError != NULL) {
+		// Atlas is full, let the user to resize the atlas (or not), and try again.
+		stash->handleError(stash->errorUptr, FONS_ATLAS_FULL, 0);
+		added = fons__atlasAddRect(stash->atlas, gw, gh, &gx, &gy);
 	}
+	if (added == 0) return NULL;
 
 	// Init glyph.
 	glyph = fons__allocGlyph(font);
