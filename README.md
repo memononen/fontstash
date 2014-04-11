@@ -19,8 +19,8 @@ int fontNormal = fonsAddFont(fs, "sans", "DroidSerif-Regular.ttf");
 
 // Render some text
 float dx = 10, dy = 10;
-unsigned int white = glstRGBA(255,255,255,255);
-unsigned int brown = glstRGBA(192,128,0,128);
+unsigned int white = glfonsRGBA(255,255,255,255);
+unsigned int brown = glfonsRGBA(192,128,0,128);
 
 fonsSetFont(fs, fontNormal);
 fonsSetSize(fs, 124.0f);
