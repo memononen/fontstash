@@ -63,12 +63,14 @@ static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* 
 	int h = rect[3] - rect[1];
 
 	if (gl->tex == 0) return;
+	glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
 	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, gl->width);
 	glPixelStorei(GL_UNPACK_SKIP_PIXELS, rect[0]);
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, rect[1]);
 	glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_ALPHA,GL_UNSIGNED_BYTE, data);
+	glPopClientAttrib();
 }
 
 static void glfons__renderDraw(void* userPtr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts)
