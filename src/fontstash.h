@@ -71,7 +71,7 @@ struct FONStextIter {
 	unsigned int codepoint;
 	short isize, iblur;
 	struct FONSfont* font;
-	struct FONSglyph* prevGlyph;
+	int prevGlyphIndex;
 	const char* str;
 	const char* next;
 	const char* end;
@@ -1086,13 +1086,13 @@ static struct FONSglyph* fons__getGlyph(struct FONScontext* stash, struct FONSfo
 }
 
 static void fons__getQuad(struct FONScontext* stash, struct FONSfont* font,
-						   struct FONSglyph* prevGlyph, struct FONSglyph* glyph,
+						   int prevGlyphIndex, struct FONSglyph* glyph,
 						   float scale, float spacing, float* x, float* y, struct FONSquad* q)
 {
 	float rx,ry,xoff,yoff,x0,y0,x1,y1;
 
-	if (prevGlyph) {
-		float adv = fons__tt_getGlyphKernAdvance(&font->font, prevGlyph->index, glyph->index) * scale;
+	if (prevGlyphIndex != -1) {
+		float adv = fons__tt_getGlyphKernAdvance(&font->font, prevGlyphIndex, glyph->index) * scale;
 		*x += (int)(adv + spacing + 0.5f);
 	}
 
@@ -1202,8 +1202,8 @@ float fonsDrawText(struct FONScontext* stash,
 	unsigned int codepoint;
 	unsigned int utf8state = 0;
 	struct FONSglyph* glyph = NULL;
-	struct FONSglyph* prevGlyph = NULL;
 	struct FONSquad q;
+	int prevGlyphIndex = -1;
 	short isize = (short)(state->size*10.0f);
 	short iblur = (short)state->blur;
 	float scale;
@@ -1238,7 +1238,7 @@ float fonsDrawText(struct FONScontext* stash,
 			continue;
 		glyph = fons__getGlyph(stash, font, codepoint, isize, iblur);
 		if (glyph) {
-			fons__getQuad(stash, font, prevGlyph, glyph, scale, state->spacing, &x, &y, &q);
+			fons__getQuad(stash, font, prevGlyphIndex, glyph, scale, state->spacing, &x, &y, &q);
 
 			if (stash->nverts+6 > FONS_VERTEX_COUNT)
 				fons__flush(stash);
@@ -1251,7 +1251,7 @@ float fonsDrawText(struct FONScontext* stash,
 			fons__vertex(stash, q.x0, q.y1, q.s0, q.t1, state->color);
 			fons__vertex(stash, q.x1, q.y1, q.s1, q.t1, state->color);
 		}
-		prevGlyph = glyph;
+		prevGlyphIndex = glyph != NULL ? glyph->index : -1;
 	}
 	fons__flush(stash);
 
@@ -1298,6 +1298,7 @@ int fonsTextIterInit(struct FONScontext* stash, struct FONStextIter* iter,
 	iter->next = str;
 	iter->end = end;
 	iter->codepoint = 0;
+	iter->prevGlyphIndex = -1;
 
 	return 1;
 }
@@ -1320,8 +1321,8 @@ int fonsTextIterNext(struct FONScontext* stash, struct FONStextIter* iter, struc
 		iter->y = iter->nexty;
 		glyph = fons__getGlyph(stash, iter->font, iter->codepoint, iter->isize, iter->iblur);
 		if (glyph != NULL)
-			fons__getQuad(stash, iter->font, iter->prevGlyph, glyph, iter->scale, iter->spacing, &iter->nextx, &iter->nexty, quad);
-		iter->prevGlyph = glyph;
+			fons__getQuad(stash, iter->font, iter->prevGlyphIndex, glyph, iter->scale, iter->spacing, &iter->nextx, &iter->nexty, quad);
+		iter->prevGlyphIndex = glyph != NULL ? glyph->index : -1;
 		break;
 	}
 	iter->next = str;
@@ -1387,7 +1388,7 @@ float fonsTextBounds(struct FONScontext* stash,
 	unsigned int utf8state = 0;
 	struct FONSquad q;
 	struct FONSglyph* glyph = NULL;
-	struct FONSglyph* prevGlyph = NULL;
+	int prevGlyphIndex = -1;
 	short isize = (short)(state->size*10.0f);
 	short iblur = (short)state->blur;
 	float scale;
@@ -1417,7 +1418,7 @@ float fonsTextBounds(struct FONScontext* stash,
 			continue;
 		glyph = fons__getGlyph(stash, font, codepoint, isize, iblur);
 		if (glyph) {
-			fons__getQuad(stash, font, prevGlyph, glyph, scale, state->spacing, &x, &y, &q);
+			fons__getQuad(stash, font, prevGlyph, prevGlyphIndex, scale, state->spacing, &x, &y, &q);
 			if (q.x0 < minx) minx = q.x0;
 			if (q.x1 > maxx) maxx = q.x1;
 			if (stash->params.flags & FONS_ZERO_TOPLEFT) {
@@ -1428,7 +1429,7 @@ float fonsTextBounds(struct FONScontext* stash,
 				if (q.y0 > maxy) maxy = q.y0;
 			}
 		}
-		prevGlyph = glyph;
+		prevGlyphIndex = glyph != NULL ? glyph->index : -1;
 	}
 
 	advance = x - startx;
