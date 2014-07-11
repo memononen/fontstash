@@ -66,7 +66,7 @@ int main()
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
 	
-	struct FONScontext* fs = NULL;
+	FONScontext* fs = NULL;
 
 	if (!glfwInit())
 		return -1;

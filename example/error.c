@@ -27,7 +27,7 @@
 #define GLFONTSTASH_IMPLEMENTATION
 #include "glfontstash.h"
 
-struct FONScontext* fs = NULL;
+FONScontext* fs = NULL;
 int size = 90;
 
 void dash(float dx, float dy)
@@ -48,7 +48,7 @@ void line(float sx, float sy, float ex, float ey)
 	glEnd();
 }
 
-static void expandAtlas(struct FONScontext* stash)
+static void expandAtlas(FONScontext* stash)
 {
 	int w = 0, h = 0;
 	fonsGetAtlasSize(stash, &w, &h);
@@ -60,7 +60,7 @@ static void expandAtlas(struct FONScontext* stash)
 	printf("expanded atlas to %d x %d\n", w, h);
 }
 
-static void resetAtlas(struct FONScontext* stash)
+static void resetAtlas(FONScontext* stash)
 {
 	fonsResetAtlas(stash, 256,256);
 	printf("reset atlas to 256 x 256\n");
@@ -92,7 +92,7 @@ static void key(GLFWwindow* window, int key, int scancode, int action, int mods)
 void stashError(void* uptr, int error, int val)
 {
 	(void)uptr;
-	struct FONScontext* stash = (struct FONScontext*)uptr;
+	FONScontext* stash = (FONScontext*)uptr;
 	switch (error) {
 	case FONS_ATLAS_FULL:
 		printf("atlas full\n");
