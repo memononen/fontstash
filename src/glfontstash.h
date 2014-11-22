@@ -206,8 +206,6 @@ static int glfons__renderCreate(void* userPtr, int width, int height)
 	gl->texture_uniform = glGetUniformLocation(gl->shader, "texture0");
 	gl->projMat_uniform = glGetUniformLocation(gl->shader, "projMat");
 	
-	syslog(LOG_ALERT, "projmat %i",gl->projMat_uniform);
-
 	// setup our projection matrix as an identity matrix
 	for (int i = 0; i < 16; i++) gl->projMat[i] = 0.0;
 	gl->projMat[0] = 1.0;
