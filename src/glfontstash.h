@@ -15,11 +15,19 @@
 //    misrepresented as being the original software.
 // 3. This notice may not be removed or altered from any source distribution.
 //
+// 20/11/2014 - !BAS! Using VAO and VBO for OpenGL 3+ compatibility if GLFONTSTASH_OPGL3 is defined
+// You must call glfonsProjection to set a projection matrix as GL_PROJECTION is deprecated in OGL 3.
+//
+// Note, I'm using syslog for outputting issues, this may not work on every platform. 
+
 #ifndef GLFONTSTASH_H
 #define GLFONTSTASH_H
 
 FONScontext* glfonsCreate(int width, int height, int flags);
 void glfonsDelete(FONScontext* ctx);
+#ifdef GLFONTSTASH_OPGL3
+void glfonsProjection(FONScontext* ctx, GLfloat *mat);
+#endif
 
 unsigned int glfonsRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 
@@ -27,11 +35,153 @@ unsigned int glfonsRGBA(unsigned char r, unsigned char g, unsigned char b, unsig
 
 #ifdef GLFONTSTASH_IMPLEMENTATION
 
+#ifdef GLFONTSTASH_OPGL3
+// need to add in shaders...
+#endif
+
 struct GLFONScontext {
-	GLuint tex;
+	GLuint	tex;
+#ifdef GLFONTSTASH_OPGL3
+	GLuint	vao;					// Our Vertex Array Object
+	GLuint	vbo;					// Our Vertex Buffer Object
+	GLuint	shader;					// Our shader program
+	GLfloat	projMat[16];			// Projection matrix
+	GLuint	texture_uniform;		// Uniform for our texture sampler
+	GLuint	projMat_uniform;		// Uniform for our projection matrix
+#endif
 	int width, height;
 };
 typedef struct GLFONScontext GLFONScontext;
+
+#ifdef GLFONTSTASH_OPGL3
+// Our shaders...
+char vertexShaderText[] ="#version 330\r\n\
+\r\n\
+uniform mat4 projMat;\r\n\
+\r\n\
+layout(location = 0) in vec2 vert;\r\n\
+layout(location = 1) in vec2 coord;\r\n\
+layout(location = 2) in vec4 color;\r\n\
+\r\n\
+out vec2 T;\r\n\
+out vec4 C;\r\n\
+\r\n\
+void main() {\r\n\
+	gl_Position = projMat * vec4(vert.x,vert.y, 1.0, 1.0);\r\n\
+//	gl_Position = vec4((vert.x / 512.0) - 1.0, 1.0 - (vert.y / 386.0), 0.0, 1.0);\r\n\
+	T = coord;\r\n\
+	C = color;\r\n\
+}";
+
+char fragmentShaderText[] = "#version 330\r\n\
+\r\n\
+out vec4 Color;\r\n\
+\r\n\
+in vec2 T;\r\n\
+in vec4 C;\r\n\
+\r\n\
+uniform sampler2D texture0;\r\n\
+\r\n\
+void main() {\r\n\
+	Color = C;\r\n\
+	Color.a = texture(texture0, T).r;\r\n\
+}";
+
+static GLuint shader() {
+	GLint			compiled = 0;
+	GLint			linked = 0;
+	const GLchar	*stringptrs[1];
+	
+	// create our shaders
+	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
+	// load and compile our vertex shader
+	stringptrs[0] = vertexShaderText;
+	glShaderSource(vertexShader, 1, stringptrs, 0);
+	glCompileShader(vertexShader);
+
+	// checking compile status
+	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &compiled);
+	if (!compiled) {
+		GLint		len = 0;
+		glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH , &len); 
+
+		if (len > 1) {
+			GLchar* compiler_log = (GLchar*)malloc(len);
+		
+			glGetShaderInfoLog(vertexShader, len, 0, compiler_log);
+			syslog(LOG_ALERT, "Couldn't compile vertex shader %s",compiler_log);
+		
+			free (compiler_log);
+		} else {
+			syslog(LOG_ALERT, "Couldn't compile vertex shader <unknown>");
+		}
+
+		return 0;
+	};
+
+	// load and compile our fragment shader
+	stringptrs[0] = fragmentShaderText;
+	glShaderSource(fragmentShader, 1, stringptrs, 0);
+	glCompileShader(fragmentShader);
+
+	// checking compile status
+	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compiled);
+	if (!compiled) {
+		GLint		len = 0;
+		glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH , &len); 
+
+		if (len > 1) {
+			GLchar* compiler_log = (GLchar*)malloc(len);
+		
+			glGetShaderInfoLog(fragmentShader, len, 0, compiler_log);
+			syslog(LOG_ALERT, "Couldn't compile fragment shader %s",compiler_log);
+		
+			free (compiler_log);
+		} else {
+			syslog(LOG_ALERT, "Couldn't compile fragment shader <unknown>");
+		}
+
+		return 0;
+	};
+	
+	// setup our shader program
+	GLuint programID = glCreateProgram();
+	glAttachShader(programID, vertexShader);
+	glAttachShader(programID, fragmentShader);
+
+	// and link
+	glLinkProgram(programID);
+	
+	glGetProgramiv(programID, GL_LINK_STATUS, &linked);		
+	if (!linked) {
+		GLint		len = 0;
+		glGetProgramiv(programID, GL_INFO_LOG_LENGTH , &len); 
+
+		if (len > 1) {
+			GLchar* compiler_log = (GLchar*)malloc(len);
+		
+			glGetProgramInfoLog(programID, len, 0, compiler_log);
+			syslog(LOG_ALERT, "Couldn't link shader %s",compiler_log);
+		
+			free (compiler_log);
+		} else {
+			syslog(LOG_ALERT, "Couldn't link shader <unknown>");
+		}
+
+		return 0;
+	};
+
+	// cleanup
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
+
+	// syslog(LOG_ALERT, "New shader program %i", programID);
+	
+	return programID;
+}
+#endif
 
 static int glfons__renderCreate(void* userPtr, int width, int height)
 {
@@ -43,10 +193,53 @@ static int glfons__renderCreate(void* userPtr, int width, int height)
 	}
 	glGenTextures(1, &gl->tex);
 	if (!gl->tex) return 0;
+#ifdef GLFONTSTASH_OPGL3
+	// Create shader
+	if (gl->shader != 0) {
+		glDeleteProgram(gl->shader);
+		gl->shader = 0;
+	}
+	gl->shader = shader();
+	if (!gl->shader) return 0;
+
+	// get our uniforms
+	gl->texture_uniform = glGetUniformLocation(gl->shader, "texture0");
+	gl->projMat_uniform = glGetUniformLocation(gl->shader, "projMat");
+	
+	syslog(LOG_ALERT, "projmat %i",gl->projMat_uniform);
+
+	// setup our projection matrix as an identity matrix
+	for (int i = 0; i < 16; i++) gl->projMat[i] = 0.0;
+	gl->projMat[0] = 1.0;
+	gl->projMat[5] = 1.0;
+	gl->projMat[10] = 1.0;
+	gl->projMat[15] = 1.0;
+	
+	// Create VAO
+	if (gl->vao != 0) {
+		glDeleteVertexArrays(1, &gl->vao);
+		gl->vao = 0;
+	}
+	glGenVertexArrays(1, &gl->vao);
+	if (!gl->vao) return 0;
+	
+	// Create VBO
+	if (gl->vbo != 0) {
+		glDeleteBuffers(1, &gl->vbo);
+		gl->vbo = 0;
+	}
+	glGenBuffers(1, &gl->vbo);
+	if (!gl->vbo) return 0;
+#endif
 	gl->width = width;
 	gl->height = height;
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
+#ifdef GLFONTSTASH_OPGL3
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, gl->width, gl->height, 0, GL_RED, GL_UNSIGNED_BYTE, 0);
+#else 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, gl->width, gl->height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, 0);
+#endif
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	return 1;
 }
@@ -70,7 +263,11 @@ static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* 
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, gl->width);
 	glPixelStorei(GL_UNPACK_SKIP_PIXELS, rect[0]);
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, rect[1]);
+#ifdef GLFONTSTASH_OPGL3
+	glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_RED,GL_UNSIGNED_BYTE, data);
+#else
 	glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_ALPHA,GL_UNSIGNED_BYTE, data);
+#endif
 	glPopClientAttrib();
 }
 
@@ -78,8 +275,53 @@ static void glfons__renderDraw(void* userPtr, const float* verts, const float* t
 {
 	GLFONScontext* gl = (GLFONScontext*)userPtr;
 	if (gl->tex == 0) return;
-	glBindTexture(GL_TEXTURE_2D, gl->tex);
+
 	glEnable(GL_TEXTURE_2D);
+
+#ifdef GLFONTSTASH_OPGL3
+	if (gl->shader == 0) return;
+	if (gl->vao == 0) return;
+	if (gl->vbo == 0) return;
+	
+	// init shader
+	glUseProgram(gl->shader);
+
+	// init texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gl->tex);
+	glUniform1i(gl->texture_uniform, 0);
+	
+	// init our projection matrix
+	glUniformMatrix4fv(gl->projMat_uniform, 1, false, gl->projMat);
+	
+	// bind our vao
+	glBindVertexArray(gl->vao);
+	
+	// setup our buffer
+	glBindBuffer(GL_ARRAY_BUFFER, gl->vbo);
+	glBufferData(GL_ARRAY_BUFFER, (2 * sizeof(float) * 2 * nverts) + (sizeof(int) * nverts), NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0									, sizeof(float) * 2 * nverts	, verts);
+	glBufferSubData(GL_ARRAY_BUFFER, sizeof(float) * 2 * nverts			, sizeof(float) * 2 * nverts	, tcoords);
+	glBufferSubData(GL_ARRAY_BUFFER, 2 * sizeof(float) * 2 * nverts		, sizeof(int) * nverts			, colors);
+	
+	// setup our attributes
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void *) (sizeof(float) * 2 * nverts));
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(int), (void *) (2 * sizeof(float) * 2 * nverts));
+	
+	glDrawArrays(GL_TRIANGLES, 0, nverts);
+	
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	
+	glBindVertexArray(0);
+	glUseProgram(0);
+#else
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gl->tex);
+
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 	glEnableClientState(GL_COLOR_ARRAY);
@@ -94,6 +336,7 @@ static void glfons__renderDraw(void* userPtr, const float* verts, const float* t
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
+#endif
 }
 
 static void glfons__renderDelete(void* userPtr)
@@ -102,9 +345,26 @@ static void glfons__renderDelete(void* userPtr)
 	if (gl->tex != 0)
 		glDeleteTextures(1, &gl->tex);
 	gl->tex = 0;
+	
+#ifdef GLFONTSTASH_OPGL3
+	gl->texture_uniform = 0;
+	gl->projMat_uniform = 0;
+	if (gl->shader != 0) {
+		glDeleteProgram(gl->shader);
+		gl->shader = 0;
+	}
+	if (gl->vao != 0) {
+		glDeleteVertexArrays(1, &gl->vao);
+		gl->vao = 0;
+	}	
+	if (gl->vbo != 0) {
+		glDeleteBuffers(1, &gl->vbo);
+		gl->vbo = 0;
+	}
+#endif
+	
 	free(gl);
 }
-
 
 FONScontext* glfonsCreate(int width, int height, int flags)
 {
@@ -137,6 +397,28 @@ void glfonsDelete(FONScontext* ctx)
 {
 	fonsDeleteInternal(ctx);
 }
+
+#ifdef GLFONTSTASH_OPGL3
+// Keeping in mind that in OpenGL 0,0 is the bottom left corner of your screen but for text 
+// it makes more sense for 0,0 to be the top left this would calculate a usable projection matrix:
+// memset(mat, 0, 16 * sizeof(GLfloat));
+// mat[0] = 2.0 / screenwidth;
+// mat[5] = -2.0 / screenheight;
+// mat[10] = 2.0;
+// mat[12] = -1.0;
+// mat[13] = 1.0;
+// mat[14] = -1.0;
+// mat[15] = 1.0;
+
+void glfonsProjection(FONScontext* ctx, GLfloat *mat)
+{
+	GLFONScontext* gl = (GLFONScontext*)(ctx->params.userPtr);
+
+	for (int i = 0; i < 16; i++) {
+		gl->projMat[i] = mat[i];
+	}
+}
+#endif
 
 unsigned int glfonsRGBA(unsigned char r, unsigned char g, unsigned char b, unsigned char a)
 {
