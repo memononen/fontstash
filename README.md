@@ -126,6 +126,29 @@ $ make
 $ ./example
 ```
 
+# OpenGL 3+ support
+
+When using font stash with OpenGL 3 you run into problems due to OGLs switch to using vertex arrays, vertex buffers and removal of the fixed rendering pipeline. 
+Simply include gl3fontstash.h instead of glfontstash.h to use the OpenGL 3 render additions.
+
+Note that this requires an extension manager to be used such as [GLEW](http://glew.sourceforge.net/) and that a new function called gl3fonsProjection must be called before rendering text. 
+
+``` c
+GLfloat mat[16];
+
+memset(mat, 0, 16 * sizeof(GLfloat));
+mat[0] = 2.0 / screenwidth;
+mat[5] = -2.0 / screenheight;
+mat[10] = 2.0;
+mat[12] = -1.0;
+mat[13] = 1.0;
+mat[14] = -1.0;
+mat[15] = 1.0;
+
+gl3fonsProjection(mFS, mat);
+
+```
+
 # License
 The library is licensed under [zlib license](LICENSE.txt)
 
