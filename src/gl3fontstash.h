@@ -89,6 +89,7 @@ static GLuint shader() {
 	GLint			compiled = 0;
 	GLint			linked = 0;
 	const GLchar	*stringptrs[1];
+	GLuint 			programID = 0;
 	
 	// create our shaders
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -153,7 +154,7 @@ static GLuint shader() {
 	};
 	
 	// setup our shader program
-	GLuint programID = glCreateProgram();
+	programID = glCreateProgram();
 	glAttachShader(programID, vertexShader);
 	glAttachShader(programID, fragmentShader);
 
@@ -195,6 +196,8 @@ static GLuint shader() {
 static int gl3fons__renderCreate(void* userPtr, int width, int height)
 {
 	GLFONScontext* gl = (GLFONScontext*)userPtr;
+	int i;
+	
 	// Create may be called multiple times, delete existing texture.
 	if (gl->tex != 0) {
 		glDeleteTextures(1, &gl->tex);
@@ -216,7 +219,7 @@ static int gl3fons__renderCreate(void* userPtr, int width, int height)
 	gl->projMat_uniform = glGetUniformLocation(gl->shader, "projMat");
 	
 	// setup our projection matrix as an identity matrix
-	for (int i = 0; i < 16; i++) gl->projMat[i] = 0.0;
+	for (i = 0; i < 16; i++) gl->projMat[i] = 0.0;
 	gl->projMat[0] = 1.0;
 	gl->projMat[5] = 1.0;
 	gl->projMat[10] = 1.0;
@@ -389,8 +392,9 @@ void gl3fonsDelete(FONScontext* ctx)
 void gl3fonsProjection(FONScontext* ctx, GLfloat *mat)
 {
 	GLFONScontext* gl = (GLFONScontext*)(ctx->params.userPtr);
+	int i;
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		gl->projMat[i] = mat[i];
 	}
 }
