@@ -193,17 +193,17 @@ static void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *des
 	*lineGap = font->font->height - (*ascent - *descent);
 }
 
-static fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
+static float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
 {
 	return size / (font->font->ascender - font->font->descender);
 }
 
-static fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
+static int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
 {
 	return FT_Get_Char_Index(font->font, codepoint);
 }
 
-static fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
+static int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
 							  int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1)
 {
 	FT_Error ftError;
@@ -227,7 +227,7 @@ static fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, fl
 	return 1;
 }
 
-static fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+static void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
 								float scaleX, float scaleY, int glyph)
 {
 	FT_GlyphSlot ftGlyph = font->font->glyph;
@@ -246,7 +246,7 @@ static fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, i
 	}
 }
 
-static fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
+static int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
 {
 	FT_Vector ftKerning;
 	FT_Get_Kerning(font->font, glyph1, glyph2, FT_KERNING_DEFAULT, &ftKerning);
