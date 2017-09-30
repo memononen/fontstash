@@ -1470,7 +1470,7 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 	short iblur = (short)state->blur;
 	float scale;
 	FONSfont* font;
-	float startx, advance;
+	float startx, diffx, advance = 0.0f;
 	float minx, miny, maxx, maxy;
 
 	if (stash == NULL) return 0;
@@ -1493,6 +1493,16 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 	for (; str != end; ++str) {
 		if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char*)str))
 			continue;
+
+		// If we have a newline or carriage return,
+		// we need to set the advance to the max and
+		// set x back to startx.
+		if (codepoint == 10 || codepoint == 13) {
+			diffx = x - startx;
+			advance = advance > diffx ? advance : diffx;
+			x = startx;
+		}
+
 		glyph = fons__getGlyph(stash, font, codepoint, isize, iblur);
 		if (glyph != NULL) {
 			fons__getQuad(stash, font, prevGlyphIndex, glyph, scale, state->spacing, &x, &y, &q);
@@ -1509,7 +1519,8 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 		prevGlyphIndex = glyph != NULL ? glyph->index : -1;
 	}
 
-	advance = x - startx;
+	diffx = x - startx;
+	advance = advance > diffx ? advance : diffx;
 
 	// Align horizontally
 	if (state->align & FONS_ALIGN_LEFT) {
