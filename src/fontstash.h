@@ -886,6 +886,35 @@ error:
 	return FONS_INVALID;
 }
 
+static FILE* fons__fopen(const char* filename, const char* mode)
+{
+#ifdef _WIN32
+	int len = 0;
+	int fileLen = strlen(filename);
+	int modeLen = strlen(mode);
+	wchar_t wpath[MAX_PATH];
+	wchar_t wmode[MAX_PATH];
+	FILE* f;
+
+	if (fileLen == 0)
+		return NULL;
+	if (modeLen == 0)
+		return NULL;
+	len = MultiByteToWideChar(CP_UTF8, 0, filename, fileLen, wpath, fileLen);
+	if (len >= MAX_PATH)
+		return NULL;
+	wpath[len] = L'\0';
+	len = MultiByteToWideChar(CP_UTF8, 0, mode, modeLen, wmode, modeLen);
+	if (len >= MAX_PATH)
+		return NULL;
+	wmode[len] = L'\0';
+	f = _wfopen(wpath, wmode);
+	return f;
+#else
+	return fopen(filename, mode);
+#endif
+}
+
 int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 {
 	FILE* fp = 0;
@@ -893,7 +922,7 @@ int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 	unsigned char* data = NULL;
 
 	// Read in the font data.
-	fp = fopen(path, "rb");
+	fp = fons__fopen(path, "rb");
 	if (fp == NULL) goto error;
 	fseek(fp,0,SEEK_END);
 	dataSize = (int)ftell(fp);
