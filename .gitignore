@@ -26,3 +26,7 @@ build/*
 
 ## xcode specific
 *xcuserdata*
+src/lib-vc2015/glfw3dll.lib
+src/GLFW/glfw3native.h
+src/GLFW/glfw3.h
+src/lib-vc2015/glfw3.lib
