@@ -23,6 +23,14 @@
 extern "C" {
 #endif
 
+// options
+#ifndef FONS_OPTIONS_RGBA_COLORS
+	#define FONS_OPTIONS_RGBA_COLORS 1
+#endif
+#ifndef FONS_OPTIONS_FILE_IO
+	#define FONS_OPTIONS_FILE_IO 1
+#endif
+
 // To make the implementation private to the file that generates the implementation
 #ifdef FONS_STATIC
 #define FONS_DEF static
@@ -60,13 +68,24 @@ enum FONSerrorCode {
 	FONS_STATES_UNDERFLOW = 4,
 };
 
+#pragma pack(push, 1)
+struct FONScolor
+{
+	#if FONS_OPTIONS_RGBA_COLORS
+	unsigned char r, g, b;
+	#endif
+	unsigned char a;
+};
+#pragma pack(pop)
+typedef struct FONScolor FONScolor;
+
 struct FONSparams {
 	int width, height;
 	unsigned char flags;
 	void* userPtr;
 	int (*renderCreate)(void* uptr, int width, int height);
 	int (*renderResize)(void* uptr, int width, int height);
-	void (*renderUpdate)(void* uptr, int* rect, const unsigned char* data);
+	void (*renderUpdate)(void* uptr, int* rect, const FONScolor* data);
 	void (*renderDraw)(void* uptr, const float* verts, const float* tcoords, const unsigned int* colors, int nverts);
 	void (*renderDelete)(void* uptr);
 };
@@ -94,6 +113,18 @@ typedef struct FONStextIter FONStextIter;
 
 typedef struct FONScontext FONScontext;
 
+struct FONSfontEngine {
+	void* (*loadFont)(FONScontext *context, unsigned char *data, int dataSize); // returns userdata or NULL
+	void  (*freeFont)(void *usrdata);
+	void  (*getFontVMetrics)(void *usrdata, int *ascent, int *descent, int *lineGap);
+	float (*getPixelHeightScale)(void *usrdata, float size);
+	int   (*getGlyphIndex)(void *usrdata, int codepoint);
+	int   (*buildGlyphBitmap)(void *usrdata, int glyph, float size, float scale, int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1);
+	void  (*renderGlyphBitmap)(void *usrdata, FONScolor *output, int outWidth, int outHeight, int outStride, float scaleX, float scaleY, int glyph);
+	int   (*getGlyphKernAdvance)(void *usrdata, int glyph1, int glyph2);
+};
+typedef struct FONSfontEngine FONSfontEngine;
+
 // Contructor and destructor.
 FONS_DEF FONScontext* fonsCreateInternal(FONSparams* params);
 FONS_DEF void fonsDeleteInternal(FONScontext* s);
@@ -107,8 +138,12 @@ FONS_DEF int fonsExpandAtlas(FONScontext* s, int width, int height);
 FONS_DEF int fonsResetAtlas(FONScontext* stash, int width, int height);
 
 // Add fonts
+#if FONS_OPTIONS_FILE_IO
 FONS_DEF int fonsAddFont(FONScontext* s, const char* name, const char* path);
+FONS_DEF int fonsAddFontWithEngine(FONScontext* s, const char* name, const char* path, FONSfontEngine* engine);
+#endif
 FONS_DEF int fonsAddFontMem(FONScontext* s, const char* name, unsigned char* data, int ndata, int freeData);
+FONS_DEF int fonsAddFontMemWithEngine(FONScontext* s, const char* name, unsigned char* data, int ndata, int freeData, FONSfontEngine* engine);
 FONS_DEF int fonsGetFontByName(FONScontext* s, const char* name);
 FONS_DEF int fonsAddFallbackFont(FONScontext* stash, int base, int fallback);
 
@@ -138,7 +173,7 @@ FONS_DEF int fonsTextIterInit(FONScontext* stash, FONStextIter* iter, float x, f
 FONS_DEF int fonsTextIterNext(FONScontext* stash, FONStextIter* iter, struct FONSquad* quad);
 
 // Pull texture changes
-FONS_DEF const unsigned char* fonsGetTextureData(FONScontext* stash, int* width, int* height);
+FONS_DEF const FONScolor* fonsGetTextureData(FONScontext* stash, int* width, int* height);
 FONS_DEF int fonsValidateTexture(FONScontext* s, int* dirty);
 
 // Draws the stash texture for debugging
@@ -153,7 +188,20 @@ FONS_DEF void fonsDrawDebug(FONScontext* s, float x, float y);
 
 #ifdef FONTSTASH_IMPLEMENTATION
 
+#if FONS_OPTIONS_FILE_IO && defined(_WIN32)
+#include <windows.h>
+#endif
+
 #define FONS_NOTUSED(v)  (void)sizeof(v)
+
+#if FONS_OPTIONS_RGBA_COLORS
+static FONScolor fons__color_clear() {FONScolor r = {0, 0, 0, 0}; return r;}
+static FONScolor fons__color_white() {FONScolor r = {0xff, 0xff, 0xff, 0xff}; return r;}
+#else
+static FONScolor fons__color_clear() {FONScolor r = {0}; return r;}
+static FONScolor fons__color_white() {FONScolor r = {0xff}; return r;}
+#endif
+static FONScolor fons__color_alpha(unsigned char alpha) {FONScolor r = fons__color_white(); r.a = alpha; return r;}
 
 #ifdef FONS_USE_FREETYPE
 
@@ -168,48 +216,65 @@ struct FONSttFontImpl {
 typedef struct FONSttFontImpl FONSttFontImpl;
 
 static FT_Library ftLibrary;
+static bool ftLibrary_init = false;
 
-static int fons__tt_init()
-{
-	FT_Error ftError;
-	FONS_NOTUSED(context);
-	ftError = FT_Init_FreeType(&ftLibrary);
-	return ftError == 0;
-}
-
-static int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize)
+static void *fons__tt_loadFont(FONScontext *context, unsigned char *data, int dataSize)
 {
 	FT_Error ftError;
 	FONS_NOTUSED(context);
 
-	//font->font.userdata = stash;
+	if(!ftLibrary_init) {
+		ftError = FT_Init_FreeType(&ftLibrary);
+		if (ftError == 0) {
+			ftLibrary_init = true;
+		} else {
+			return NULL;
+		}
+	}
+
+	FONSttFontImpl *font = (FONSttFontImpl*)malloc(sizeof(FONSttFontImpl));
 	ftError = FT_New_Memory_Face(ftLibrary, (const FT_Byte*)data, dataSize, 0, &font->font);
-	return ftError == 0;
+	if (ftError == 0) {
+		return font;
+	} else {
+		free(font);
+		return NULL;
+	}
 }
 
-static void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *descent, int *lineGap)
+static void fons__tt_freeFont(void *usrdata)
 {
+	if (usrdata)
+		free(usrdata);
+}
+
+static void fons__tt_getFontVMetrics(void *usrdata, int *ascent, int *descent, int *lineGap)
+{
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	*ascent = font->font->ascender;
 	*descent = font->font->descender;
 	*lineGap = font->font->height - (*ascent - *descent);
 }
 
-static float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
+static float fons__tt_getPixelHeightScale(void *usrdata, float size)
 {
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	return size / (font->font->ascender - font->font->descender);
 }
 
-static int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
+static int fons__tt_getGlyphIndex(void *usrdata, int codepoint)
 {
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	return FT_Get_Char_Index(font->font, codepoint);
 }
 
-static int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
+static int fons__tt_buildGlyphBitmap(void *usrdata, int glyph, float size, float scale,
 							  int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1)
 {
 	FT_Error ftError;
 	FT_GlyphSlot ftGlyph;
 	FT_Fixed advFixed;
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	FONS_NOTUSED(scale);
 
 	ftError = FT_Set_Pixel_Sizes(font->font, 0, (FT_UInt)(size * (float)font->font->units_per_EM / (float)(font->font->ascender - font->font->descender)));
@@ -228,12 +293,13 @@ static int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size
 	return 1;
 }
 
-static void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+static void fons__tt_renderGlyphBitmap(void *usrdata, FONScolor *output, int outWidth, int outHeight, int outStride,
 								float scaleX, float scaleY, int glyph)
 {
 	FT_GlyphSlot ftGlyph = font->font->glyph;
 	int ftGlyphOffset = 0;
 	int x, y;
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	FONS_NOTUSED(outWidth);
 	FONS_NOTUSED(outHeight);
 	FONS_NOTUSED(scaleX);
@@ -242,14 +308,15 @@ static void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *outp
 
 	for ( y = 0; y < ftGlyph->bitmap.rows; y++ ) {
 		for ( x = 0; x < ftGlyph->bitmap.width; x++ ) {
-			output[(y * outStride) + x] = ftGlyph->bitmap.buffer[ftGlyphOffset++];
+			output[(y * outStride) + x] = fons__color_alpha(ftGlyph->bitmap.buffer[ftGlyphOffset++]);
 		}
 	}
 }
 
-static int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
+static int fons__tt_getGlyphKernAdvance(void *usrdata, int glyph1, int glyph2)
 {
 	FT_Vector ftKerning;
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	FT_Get_Kerning(font->font, glyph1, glyph2, FT_KERNING_DEFAULT, &ftKerning);
 	return (int)((ftKerning.x + 32) >> 6);  // Round up and convert to integer
 }
@@ -269,58 +336,89 @@ struct FONSttFontImpl {
 };
 typedef struct FONSttFontImpl FONSttFontImpl;
 
-static int fons__tt_init(FONScontext *context)
+static void *fons__tt_loadFont(FONScontext *context, unsigned char *data, int dataSize)
 {
-	FONS_NOTUSED(context);
-	return 1;
-}
-
-static int fons__tt_loadFont(FONScontext *context, FONSttFontImpl *font, unsigned char *data, int dataSize)
-{
-	int stbError;
 	FONS_NOTUSED(dataSize);
 
+	FONSttFontImpl *font = (FONSttFontImpl*)malloc(sizeof(FONSttFontImpl));
 	font->font.userdata = context;
-	stbError = stbtt_InitFont(&font->font, data, 0);
-	return stbError;
+	if (stbtt_InitFont(&font->font, data, 0)) {
+		return font;
+	} else {
+		free(font);
+		return NULL;
+	}
 }
 
-static void fons__tt_getFontVMetrics(FONSttFontImpl *font, int *ascent, int *descent, int *lineGap)
+static void fons__tt_freeFont(void *usrdata)
 {
+	if (usrdata)
+		free(usrdata);
+}
+
+static void fons__tt_getFontVMetrics(void *usrdata, int *ascent, int *descent, int *lineGap)
+{
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	stbtt_GetFontVMetrics(&font->font, ascent, descent, lineGap);
 }
 
-static float fons__tt_getPixelHeightScale(FONSttFontImpl *font, float size)
+static float fons__tt_getPixelHeightScale(void *usrdata, float size)
 {
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	return stbtt_ScaleForPixelHeight(&font->font, size);
 }
 
-static int fons__tt_getGlyphIndex(FONSttFontImpl *font, int codepoint)
+static int fons__tt_getGlyphIndex(void *usrdata, int codepoint)
 {
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	return stbtt_FindGlyphIndex(&font->font, codepoint);
 }
 
-static int fons__tt_buildGlyphBitmap(FONSttFontImpl *font, int glyph, float size, float scale,
+static int fons__tt_buildGlyphBitmap(void *usrdata, int glyph, float size, float scale,
 							  int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1)
 {
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	FONS_NOTUSED(size);
 	stbtt_GetGlyphHMetrics(&font->font, glyph, advance, lsb);
 	stbtt_GetGlyphBitmapBox(&font->font, glyph, scale, scale, x0, y0, x1, y1);
 	return 1;
 }
 
-static void fons__tt_renderGlyphBitmap(FONSttFontImpl *font, unsigned char *output, int outWidth, int outHeight, int outStride,
+static void fons__tt_renderGlyphBitmap(void *usrdata, FONScolor *output, int outWidth, int outHeight, int outStride,
 								float scaleX, float scaleY, int glyph)
 {
-	stbtt_MakeGlyphBitmap(&font->font, output, outWidth, outHeight, outStride, scaleX, scaleY, glyph);
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
+	stbtt_MakeGlyphBitmap(&font->font, (unsigned char*)output, outWidth, outHeight, outStride * sizeof(FONScolor), scaleX, scaleY, glyph);
+
+	// for rgba, do Alpha -> RGBA conversion in-place
+	#if FONS_OPTIONS_RGBA_COLORS
+		for(int y = outHeight - 1; y >= 0; y--)
+			for(int x = outWidth - 1; x >= 0; x--)
+				output[outStride * y + x] = fons__color_alpha(((unsigned char*)output)[outStride * sizeof(FONScolor) * y + x]);
+	#endif
 }
 
-static int fons__tt_getGlyphKernAdvance(FONSttFontImpl *font, int glyph1, int glyph2)
+static int fons__tt_getGlyphKernAdvance(void *usrdata, int glyph1, int glyph2)
 {
+	FONSttFontImpl *font = (FONSttFontImpl*)usrdata;
 	return stbtt_GetGlyphKernAdvance(&font->font, glyph1, glyph2);
 }
 
 #endif
+
+static FONSfontEngine *fons__tt_getEngine() {
+	static FONSfontEngine e = {
+		fons__tt_loadFont,
+		fons__tt_freeFont,
+		fons__tt_getFontVMetrics,
+		fons__tt_getPixelHeightScale,
+		fons__tt_getGlyphIndex,
+		fons__tt_buildGlyphBitmap,
+		fons__tt_renderGlyphBitmap,
+		fons__tt_getGlyphKernAdvance,
+	};
+	return &e;
+}
 
 #ifndef FONS_SCRATCH_BUF_SIZE
 #	define FONS_SCRATCH_BUF_SIZE 64000
@@ -381,7 +479,8 @@ typedef struct FONSglyph FONSglyph;
 
 struct FONSfont
 {
-	FONSttFontImpl font;
+	FONSfontEngine* e;
+	void* edata;
 	char name[64];
 	unsigned char* data;
 	int dataSize;
@@ -427,7 +526,7 @@ struct FONScontext
 {
 	FONSparams params;
 	float itw,ith;
-	unsigned char* texData;
+	FONScolor* texData;
 	int dirtyRect[4];
 	FONSfont** fonts;
 	FONSatlas* atlas;
@@ -698,7 +797,7 @@ static int fons__atlasAddRect(FONSatlas* atlas, int rw, int rh, int* rx, int* ry
 static void fons__addWhiteRect(FONScontext* stash, int w, int h)
 {
 	int x, y, gx, gy;
-	unsigned char* dst;
+	FONScolor* dst;
 	if (fons__atlasAddRect(stash->atlas, w, h, &gx, &gy) == 0)
 		return;
 
@@ -706,7 +805,7 @@ static void fons__addWhiteRect(FONScontext* stash, int w, int h)
 	dst = &stash->texData[gx + gy * stash->params.width];
 	for (y = 0; y < h; y++) {
 		for (x = 0; x < w; x++)
-			dst[x] = 0xff;
+			dst[x] = fons__color_white();
 		dst += stash->params.width;
 	}
 
@@ -715,6 +814,7 @@ static void fons__addWhiteRect(FONScontext* stash, int w, int h)
 	stash->dirtyRect[2] = fons__maxi(stash->dirtyRect[2], gx+w);
 	stash->dirtyRect[3] = fons__maxi(stash->dirtyRect[3], gy+h);
 }
+
 
 FONScontext* fonsCreateInternal(FONSparams* params)
 {
@@ -730,9 +830,6 @@ FONScontext* fonsCreateInternal(FONSparams* params)
 	// Allocate scratch buffer.
 	stash->scratch = (unsigned char*)malloc(FONS_SCRATCH_BUF_SIZE);
 	if (stash->scratch == NULL) goto error;
-
-	// Initialize implementation library
-	if (!fons__tt_init(stash)) goto error;
 
 	if (stash->params.renderCreate != NULL) {
 		if (stash->params.renderCreate(stash->params.userPtr, stash->params.width, stash->params.height) == 0)
@@ -752,9 +849,9 @@ FONScontext* fonsCreateInternal(FONSparams* params)
 	// Create texture for the cache.
 	stash->itw = 1.0f/stash->params.width;
 	stash->ith = 1.0f/stash->params.height;
-	stash->texData = (unsigned char*)malloc(stash->params.width * stash->params.height);
+	stash->texData = (FONScolor*)malloc(stash->params.width * stash->params.height * sizeof(FONScolor));
 	if (stash->texData == NULL) goto error;
-	memset(stash->texData, 0, stash->params.width * stash->params.height);
+	memset(stash->texData, 0, stash->params.width * stash->params.height * sizeof(FONScolor));
 
 	stash->dirtyRect[0] = stash->params.width;
 	stash->dirtyRect[1] = stash->params.height;
@@ -855,6 +952,7 @@ void fonsClearState(FONScontext* stash)
 static void fons__freeFont(FONSfont* font)
 {
 	if (font == NULL) return;
+	if (font->e && font->edata) font->e->freeFont(font->edata);
 	if (font->glyphs) free(font->glyphs);
 	if (font->freeData && font->data) free(font->data);
 	free(font);
@@ -887,6 +985,8 @@ error:
 	return FONS_INVALID;
 }
 
+#if FONS_OPTIONS_FILE_IO
+
 static FILE* fons__fopen(const char* filename, const char* mode)
 {
 #ifdef _WIN32
@@ -918,6 +1018,11 @@ static FILE* fons__fopen(const char* filename, const char* mode)
 
 int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 {
+	return fonsAddFontWithEngine(stash, name, path, fons__tt_getEngine());
+}
+
+int fonsAddFontWithEngine(FONScontext* stash, const char* name, const char* path, FONSfontEngine* engine)
+{
 	FILE* fp = 0;
 	int dataSize = 0, readed;
 	unsigned char* data = NULL;
@@ -935,7 +1040,7 @@ int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 	fp = 0;
 	if (readed != dataSize) goto error;
 
-	return fonsAddFontMem(stash, name, data, dataSize, 1);
+	return fonsAddFontMemWithEngine(stash, name, data, dataSize, 1, engine);
 
 error:
 	if (data) free(data);
@@ -943,16 +1048,28 @@ error:
 	return FONS_INVALID;
 }
 
+#endif
+
+
 int fonsAddFontMem(FONScontext* stash, const char* name, unsigned char* data, int dataSize, int freeData)
 {
+	return fonsAddFontMemWithEngine(stash, name, data, dataSize, freeData, fons__tt_getEngine());
+}
+
+
+int fonsAddFontMemWithEngine(FONScontext* stash, const char* name, unsigned char* data, int dataSize, int freeData, FONSfontEngine* engine)
+{
 	int i, ascent, descent, fh, lineGap;
-	FONSfont* font;
+	FONSfont* font = NULL;
+
+	if (!engine) goto error;
 
 	int idx = fons__allocFont(stash);
 	if (idx == FONS_INVALID)
 		return FONS_INVALID;
 
 	font = stash->fonts[idx];
+	font->e = engine;
 
 	strncpy(font->name, name, sizeof(font->name));
 	font->name[sizeof(font->name)-1] = '\0';
@@ -968,11 +1085,12 @@ int fonsAddFontMem(FONScontext* stash, const char* name, unsigned char* data, in
 
 	// Init font
 	stash->nscratch = 0;
-	if (!fons__tt_loadFont(stash, &font->font, data, dataSize)) goto error;
+	font->edata = font->e->loadFont(stash, data, dataSize);
+	if (!font->edata) goto error;
 
 	// Store normalized line height. The real line height is got
 	// by multiplying the lineh by font size.
-	fons__tt_getFontVMetrics( &font->font, &ascent, &descent, &lineGap);
+	font->e->getFontVMetrics(font->edata, &ascent, &descent, &lineGap);
 	fh = ascent - descent;
 	font->ascender = (float)ascent / (float)fh;
 	font->descender = (float)descent / (float)fh;
@@ -985,6 +1103,7 @@ error:
 	stash->nfonts--;
 	return FONS_INVALID;
 }
+
 
 int fonsGetFontByName(FONScontext* s, const char* name)
 {
@@ -1014,48 +1133,48 @@ static FONSglyph* fons__allocGlyph(FONSfont* font)
 #define APREC 16
 #define ZPREC 7
 
-static void fons__blurCols(unsigned char* dst, int w, int h, int dstStride, int alpha)
+static void fons__blurCols(FONScolor* dst, int w, int h, int dstStride, int alpha)
 {
 	int x, y;
 	for (y = 0; y < h; y++) {
 		int z = 0; // force zero border
 		for (x = 1; x < w; x++) {
-			z += (alpha * (((int)(dst[x]) << ZPREC) - z)) >> APREC;
-			dst[x] = (unsigned char)(z >> ZPREC);
+			z += (alpha * (((int)(dst[x].a) << ZPREC) - z)) >> APREC;
+			dst[x] = fons__color_alpha((unsigned char)(z >> ZPREC));
 		}
-		dst[w-1] = 0; // force zero border
+		dst[w-1] = fons__color_clear(); // force zero border
 		z = 0;
 		for (x = w-2; x >= 0; x--) {
-			z += (alpha * (((int)(dst[x]) << ZPREC) - z)) >> APREC;
-			dst[x] = (unsigned char)(z >> ZPREC);
+			z += (alpha * (((int)(dst[x].a) << ZPREC) - z)) >> APREC;
+			dst[x] = fons__color_alpha((unsigned char)(z >> ZPREC));
 		}
-		dst[0] = 0; // force zero border
+		dst[0] = fons__color_clear(); // force zero border
 		dst += dstStride;
 	}
 }
 
-static void fons__blurRows(unsigned char* dst, int w, int h, int dstStride, int alpha)
+static void fons__blurRows(FONScolor* dst, int w, int h, int dstStride, int alpha)
 {
 	int x, y;
 	for (x = 0; x < w; x++) {
 		int z = 0; // force zero border
 		for (y = dstStride; y < h*dstStride; y += dstStride) {
-			z += (alpha * (((int)(dst[y]) << ZPREC) - z)) >> APREC;
-			dst[y] = (unsigned char)(z >> ZPREC);
+			z += (alpha * (((int)(dst[y].a) << ZPREC) - z)) >> APREC;
+			dst[y] = fons__color_alpha((unsigned char)(z >> ZPREC));
 		}
-		dst[(h-1)*dstStride] = 0; // force zero border
+		dst[(h-1)*dstStride] = fons__color_clear(); // force zero border
 		z = 0;
 		for (y = (h-2)*dstStride; y >= 0; y -= dstStride) {
-			z += (alpha * (((int)(dst[y]) << ZPREC) - z)) >> APREC;
-			dst[y] = (unsigned char)(z >> ZPREC);
+			z += (alpha * (((int)(dst[y].a) << ZPREC) - z)) >> APREC;
+			dst[y] = fons__color_alpha((unsigned char)(z >> ZPREC));
 		}
-		dst[0] = 0; // force zero border
+		dst[0] = fons__color_clear(); // force zero border
 		dst++;
 	}
 }
 
 
-static void fons__blur(FONScontext* stash, unsigned char* dst, int w, int h, int dstStride, int blur)
+static void fons__blur(FONScontext* stash, FONScolor* dst, int w, int h, int dstStride, int blur)
 {
 	int alpha;
 	float sigma;
@@ -1083,8 +1202,8 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 	unsigned int h;
 	float size = isize/10.0f;
 	int pad, added;
-	unsigned char* bdst;
-	unsigned char* dst;
+	FONScolor* bdst;
+	FONScolor* dst;
 	FONSfont* renderFont = font;
 
 	if (isize < 2) return NULL;
@@ -1104,12 +1223,12 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 	}
 
 	// Could not find glyph, create it.
-	g = fons__tt_getGlyphIndex(&font->font, codepoint);
+	g = font->e->getGlyphIndex(font->edata, codepoint);
 	// Try to find the glyph in fallback fonts.
 	if (g == 0) {
 		for (i = 0; i < font->nfallbacks; ++i) {
 			FONSfont* fallbackFont = stash->fonts[font->fallbacks[i]];
-			int fallbackIndex = fons__tt_getGlyphIndex(&fallbackFont->font, codepoint);
+			int fallbackIndex = fallbackFont->e->getGlyphIndex(fallbackFont->edata, codepoint);
 			if (fallbackIndex != 0) {
 				g = fallbackIndex;
 				renderFont = fallbackFont;
@@ -1119,8 +1238,8 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 		// It is possible that we did not find a fallback glyph.
 		// In that case the glyph index 'g' is 0, and we'll proceed below and cache empty glyph.
 	}
-	scale = fons__tt_getPixelHeightScale(&renderFont->font, size);
-	fons__tt_buildGlyphBitmap(&renderFont->font, g, size, scale, &advance, &lsb, &x0, &y0, &x1, &y1);
+	scale = renderFont->e->getPixelHeightScale(renderFont->edata, size);
+	renderFont->e->buildGlyphBitmap(renderFont->edata, g, size, scale, &advance, &lsb, &x0, &y0, &x1, &y1);
 	gw = x1-x0 + pad*2;
 	gh = y1-y0 + pad*2;
 
@@ -1154,26 +1273,26 @@ static FONSglyph* fons__getGlyph(FONScontext* stash, FONSfont* font, unsigned in
 
 	// Rasterize
 	dst = &stash->texData[(glyph->x0+pad) + (glyph->y0+pad) * stash->params.width];
-	fons__tt_renderGlyphBitmap(&renderFont->font, dst, gw-pad*2,gh-pad*2, stash->params.width, scale,scale, g);
+	renderFont->e->renderGlyphBitmap(renderFont->edata, dst, gw-pad*2,gh-pad*2, stash->params.width, scale,scale, g);
 
 	// Make sure there is one pixel empty border.
 	dst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
 	for (y = 0; y < gh; y++) {
-		dst[y*stash->params.width] = 0;
-		dst[gw-1 + y*stash->params.width] = 0;
+		dst[y*stash->params.width] = fons__color_clear();
+		dst[gw-1 + y*stash->params.width] = fons__color_clear();
 	}
 	for (x = 0; x < gw; x++) {
-		dst[x] = 0;
-		dst[x + (gh-1)*stash->params.width] = 0;
+		dst[x] = fons__color_clear();
+		dst[x + (gh-1)*stash->params.width] = fons__color_clear();
 	}
 
 	// Debug code to color the glyph background
-/*	unsigned char* fdst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
+/*	FONScolor* fdst = &stash->texData[glyph->x0 + glyph->y0 * stash->params.width];
 	for (y = 0; y < gh; y++) {
 		for (x = 0; x < gw; x++) {
 			int a = (int)fdst[x+y*stash->params.width] + 20;
 			if (a > 255) a = 255;
-			fdst[x+y*stash->params.width] = a;
+			fdst[x+y*stash->params.width] = fons__color_alpha(a);
 		}
 	}*/
 
@@ -1199,7 +1318,7 @@ static void fons__getQuad(FONScontext* stash, FONSfont* font,
 	float rx,ry,xoff,yoff,x0,y0,x1,y1;
 
 	if (prevGlyphIndex != -1) {
-		float adv = fons__tt_getGlyphKernAdvance(&font->font, prevGlyphIndex, glyph->index) * scale;
+		float adv = font->e->getGlyphKernAdvance(font->edata, prevGlyphIndex, glyph->index) * scale;
 		*x += (int)(adv + spacing + 0.5f);
 	}
 
@@ -1322,7 +1441,7 @@ FONS_DEF float fonsDrawText(FONScontext* stash,
 	font = stash->fonts[state->font];
 	if (font->data == NULL) return x;
 
-	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
+	scale = font->e->getPixelHeightScale(font->edata, (float)isize/10.0f);
 
 	if (end == NULL)
 		end = str + strlen(str);
@@ -1380,7 +1499,7 @@ FONS_DEF int fonsTextIterInit(FONScontext* stash, FONStextIter* iter,
 
 	iter->isize = (short)(state->size*10.0f);
 	iter->iblur = (short)state->blur;
-	iter->scale = fons__tt_getPixelHeightScale(&iter->font->font, (float)iter->isize/10.0f);
+	iter->scale = iter->font->e->getPixelHeightScale(iter->font->edata, (float)iter->isize/10.0f);
 
 	// Align horizontally
 	if (state->align & FONS_ALIGN_LEFT) {
@@ -1508,7 +1627,7 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 	font = stash->fonts[state->font];
 	if (font->data == NULL) return 0;
 
-	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
+	scale = font->e->getPixelHeightScale(font->edata, (float)isize/10.0f);
 
 	// Align vertically.
 	y += fons__getVertAlign(stash, font, state->align, isize);
@@ -1606,7 +1725,7 @@ FONS_DEF void fonsLineBounds(FONScontext* stash, float y, float* miny, float* ma
 	}
 }
 
-FONS_DEF const unsigned char* fonsGetTextureData(FONScontext* stash, int* width, int* height)
+FONS_DEF const FONScolor* fonsGetTextureData(FONScontext* stash, int* width, int* height)
 {
 	if (width != NULL)
 		*width = stash->params.width;
@@ -1667,7 +1786,7 @@ FONS_DEF void fonsGetAtlasSize(FONScontext* stash, int* width, int* height)
 FONS_DEF int fonsExpandAtlas(FONScontext* stash, int width, int height)
 {
 	int i, maxy = 0;
-	unsigned char* data = NULL;
+	FONScolor* data = NULL;
 	if (stash == NULL) return 0;
 
 	width = fons__maxi(width, stash->params.width);
@@ -1685,18 +1804,18 @@ FONS_DEF int fonsExpandAtlas(FONScontext* stash, int width, int height)
 			return 0;
 	}
 	// Copy old texture data over.
-	data = (unsigned char*)malloc(width * height);
+	data = (FONScolor*)malloc(width * height * sizeof(FONScolor));
 	if (data == NULL)
 		return 0;
 	for (i = 0; i < stash->params.height; i++) {
-		unsigned char* dst = &data[i*width];
-		unsigned char* src = &stash->texData[i*stash->params.width];
-		memcpy(dst, src, stash->params.width);
+		FONScolor* dst = &data[i*width];
+		FONScolor* src = &stash->texData[i*stash->params.width];
+		memcpy(dst, src, stash->params.width * sizeof(FONScolor));
 		if (width > stash->params.width)
-			memset(dst+stash->params.width, 0, width - stash->params.width);
+			memset(dst+stash->params.width, 0, (width - stash->params.width) * sizeof(FONScolor));
 	}
 	if (height > stash->params.height)
-		memset(&data[stash->params.height * width], 0, (height - stash->params.height) * width);
+		memset(&data[stash->params.height * width], 0, (height - stash->params.height) * width * sizeof(FONScolor));
 
 	free(stash->texData);
 	stash->texData = data;
@@ -1738,9 +1857,9 @@ FONS_DEF int fonsResetAtlas(FONScontext* stash, int width, int height)
 	fons__atlasReset(stash->atlas, width, height);
 
 	// Clear texture data.
-	stash->texData = (unsigned char*)realloc(stash->texData, width * height);
+	stash->texData = (FONScolor*)realloc(stash->texData, width * height * sizeof(FONScolor));
 	if (stash->texData == NULL) return 0;
-	memset(stash->texData, 0, width * height);
+	memset(stash->texData, 0, width * height * sizeof(FONScolor));
 
 	// Reset dirty rect
 	stash->dirtyRect[0] = width;

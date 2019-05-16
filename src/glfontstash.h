@@ -46,7 +46,11 @@ static int glfons__renderCreate(void* userPtr, int width, int height)
 	gl->width = width;
 	gl->height = height;
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, gl->width, gl->height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, 0);
+	#if FONS_OPTIONS_RGBA_COLORS
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gl->width, gl->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	#else
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, gl->width, gl->height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, 0);
+	#endif
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	return 1;
 }
@@ -57,7 +61,7 @@ static int glfons__renderResize(void* userPtr, int width, int height)
 	return glfons__renderCreate(userPtr, width, height);
 }
 
-static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* data)
+static void glfons__renderUpdate(void* userPtr, int* rect, const FONScolor* data)
 {
 	GLFONScontext* gl = (GLFONScontext*)userPtr;
 	int w = rect[2] - rect[0];
@@ -66,11 +70,15 @@ static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* 
 	if (gl->tex == 0) return;
 	glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
-	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, gl->width);
 	glPixelStorei(GL_UNPACK_SKIP_PIXELS, rect[0]);
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, rect[1]);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_ALPHA,GL_UNSIGNED_BYTE, data);
+	#if FONS_OPTIONS_RGBA_COLORS
+		glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	#else
+		glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_ALPHA, GL_UNSIGNED_BYTE, data);
+	#endif
 	glPopClientAttrib();
 }
 

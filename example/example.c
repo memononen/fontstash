@@ -57,28 +57,139 @@ static void key(GLFWwindow* window, int key, int scancode, int action, int mods)
 		debug = !debug;
 }
 
+int code_to_utf8(unsigned char* buffer, unsigned int code) // https://stackoverflow.com/questions/42012563/convert-unicode-code-points-to-utf-8-and-utf-32
+{
+	if (code <= 0x7F) {
+		buffer[0] = code;
+		return 1;
+	} else if (code <= 0x7FF) {
+		buffer[0] = 0xC0 | (code >> 6);            /* 110xxxxx */
+		buffer[1] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+		return 2;
+	} else if (code <= 0xFFFF) {
+		buffer[0] = 0xE0 | (code >> 12);           /* 1110xxxx */
+		buffer[1] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
+		buffer[2] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+		return 3;
+	} else if (code <= 0x10FFFF) {
+		buffer[0] = 0xF0 | (code >> 18);           /* 11110xxx */
+		buffer[1] = 0x80 | ((code >> 12) & 0x3F);  /* 10xxxxxx */
+		buffer[2] = 0x80 | ((code >> 6) & 0x3F);   /* 10xxxxxx */
+		buffer[3] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
+		return 4;
+	}
+	return 0;
+}
+
+#pragma pack(push, 2)
+typedef struct
+{
+	unsigned char magic[2];
+	unsigned int size;
+	unsigned short _r1, _r2;
+	unsigned int offset;
+} bmp_header_t;
+#pragma pack(pop)
+
+#define BITMAP_FRAME_W 32
+#define BITMAP_FRAME_H 32
+#define BITMAP_FRAMES 6
+
+void* bitmap_loadFont(FONScontext *context, unsigned char *data, int dataSize)
+{
+	// this is super crude bmp "parsing"
+	// will only work with "raw" 24 bit bmps
+	void *pixel_data_rgb = malloc(BITMAP_FRAME_W * BITMAP_FRAME_H * BITMAP_FRAMES * 3);
+	memcpy(pixel_data_rgb, data + ((bmp_header_t*)data)->offset, BITMAP_FRAME_W * BITMAP_FRAME_H * BITMAP_FRAMES * 3);
+	return pixel_data_rgb;
+}
+void  bitmap_freeFont(void *usrdata)
+{
+	if (usrdata)
+		free(usrdata);
+}
+void  bitmap_getFontVMetrics(void *usrdata, int *ascent, int *descent, int *lineGap)
+{
+	*ascent = BITMAP_FRAME_H - 5;
+	*descent = -5;
+	*lineGap = 1;
+}
+float bitmap_getPixelHeightScale(void *usrdata, float size)
+{
+	return BITMAP_FRAME_H;
+}
+int bitmap_getGlyphIndex(void *usrdata, int codepoint)
+{
+	if(codepoint >= 0xf0000 + 0 && codepoint < 0xf0000 + BITMAP_FRAMES)
+		return codepoint - 0xf0000 + 1;
+	else
+		return 0;
+}
+int bitmap_buildGlyphBitmap(void *usrdata, int glyph, float size, float scale, int *advance, int *lsb, int *x0, int *y0, int *x1, int *y1)
+{
+	*advance = 1;
+	*lsb = 0;
+	*x0 = 0;
+	*y0 = -BITMAP_FRAME_H + 5;
+	*x1 = BITMAP_FRAME_W;
+	*y1 = 5;
+	return 1;
+}
+void bitmap_renderGlyphBitmap(void *usrdata, FONScolor *output, int outWidth, int outHeight, int outStride, float scaleX, float scaleY, int glyph)
+{
+	for(int y = 0; y < outHeight; ++y)
+	{
+		for(int x = 0; x < outWidth; ++x)
+		{
+			int pos = (BITMAP_FRAME_W * BITMAP_FRAMES * y + x + (glyph - 1) * BITMAP_FRAME_W) * 3;
+			unsigned char b = ((unsigned char*)usrdata)[pos + 0];
+			unsigned char g = ((unsigned char*)usrdata)[pos + 1];
+			unsigned char r = ((unsigned char*)usrdata)[pos + 2];
+			#if FONS_OPTIONS_RGBA_COLORS
+				output[y * outStride + x].r = r;
+				output[y * outStride + x].g = g;
+				output[y * outStride + x].b = b;
+			#endif
+			output[y * outStride + x].a = (r == 0xff && g == 0xff && b == 0xff) ? 0x00 : 0xff;
+		}
+	}
+}
+int bitmap_getGlyphKernAdvance(void *usrdata, int glyph1, int glyph2) {return 0;}
+
+FONSfontEngine simple_bitmap_engine = {
+	bitmap_loadFont,
+	bitmap_freeFont,
+	bitmap_getFontVMetrics,
+	bitmap_getPixelHeightScale,
+	bitmap_getGlyphIndex,
+	bitmap_buildGlyphBitmap,
+	bitmap_renderGlyphBitmap,
+	bitmap_getGlyphKernAdvance
+};
+
 int main()
 {
 	int fontNormal = FONS_INVALID;
 	int fontItalic = FONS_INVALID;
 	int fontBold = FONS_INVALID;
 	int fontJapanese = FONS_INVALID;
+	int fontBitmap = FONS_INVALID;
 	GLFWwindow* window;
 	const GLFWvidmode* mode;
-	
+
 	FONScontext* fs = NULL;
 
 	if (!glfwInit())
 		return -1;
 
 	mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    window = glfwCreateWindow(mode->width - 40, mode->height - 80, "Font Stash", NULL, NULL);
+	window = glfwCreateWindow(mode->width - 40, mode->height - 80, "Font Stash", NULL, NULL);
 	if (!window) {
 		glfwTerminate();
 		return -1;
 	}
 
-    glfwSetKeyCallback(window, key);
+	glfwSetKeyCallback(window, key);
 	glfwMakeContextCurrent(window);
 
 	fs = glfonsCreate(512, 512, FONS_ZERO_TOPLEFT);
@@ -107,7 +218,14 @@ int main()
 		printf("Could not add font japanese.\n");
 		return -1;
 	}
+	fontBitmap = fonsAddFontWithEngine(fs, "bitmap", "../example/coin/coin.bmp", &simple_bitmap_engine);
+	if (fontBitmap == FONS_INVALID) {
+		printf("Could not add bitmap font.\n");
+		return -1;
+	}
+	fonsAddFallbackFont(fs, fontNormal, fontBitmap);
 
+	int sprite_frame = 0;
 	while (!glfwWindowShouldClose(window))
 	{
 		float sx, sy, dx, dy, lh = 0;
@@ -139,7 +257,7 @@ int main()
 		black = glfonsRGBA(0,0,0,255);
 
 		sx = 50; sy = 50;
-		
+
 		dx = sx; dy = sy;
 
 		dash(dx,dy);
@@ -152,7 +270,7 @@ int main()
 		dx = sx;
 		dy += lh;
 		dash(dx,dy);
-		
+
 		fonsSetSize(fs, 124.0f);
 		fonsSetFont(fs, fontNormal);
 		fonsSetColor(fs, white);
@@ -256,6 +374,21 @@ int main()
 		fonsSetColor(fs, white);
 		fonsSetBlur(fs, 0);
 		fonsDrawText(fs, dx,dy,"DROP THAT SHADOW",NULL);
+
+		// bitmap
+		dx = 50; dy = 550;
+		char temp[32], temp2[5] = {0};
+		code_to_utf8((unsigned char*)temp2, 0xf0000 + (sprite_frame / 10) % 6);
+		snprintf(temp, sizeof(temp), "hello sprite <%s> world!", temp2);
+		sprite_frame++;
+
+		fonsSetSize(fs, 32.0f);
+		fonsSetFont(fs, fontNormal);
+		fonsSetColor(fs, black);
+		fonsDrawText(fs, dx+4,dy+4,temp, NULL);
+
+		fonsSetColor(fs, white);
+		dx = fonsDrawText(fs, dx,dy,temp, NULL);
 
 		if (debug)
 			fonsDrawDebug(fs, 800.0, 50.0);

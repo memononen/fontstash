@@ -18,7 +18,7 @@ solution "fontstash"
 
 		configuration { "windows" }
 			defines { "_CRT_SECURE_NO_WARNINGS" }
-			 links { "glu32","opengl32", "gdi32", "winmm", "user32" }
+			 links { "glu32","opengl32", "gdi32", "winmm", "user32", "glfw3" }
 
 		configuration { "macosx" }
 			links { "glfw3" }
@@ -44,7 +44,7 @@ solution "fontstash"
 
 		configuration { "windows" }
 			defines { "_CRT_SECURE_NO_WARNINGS" }
-			 links { "glu32","opengl32", "gdi32", "winmm", "user32" }
+			 links { "glu32","opengl32", "gdi32", "winmm", "user32", "glfw3" }
 
 		configuration { "macosx" }
 			links { "glfw3" }

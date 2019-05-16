@@ -87,11 +87,15 @@ static int glfons__renderCreate(void* userPtr, int width, int height)
 	gl->width = width;
 	gl->height = height;
 	glBindTexture(GL_TEXTURE_2D, gl->tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, gl->width, gl->height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    static GLint swizzleRgbaParams[4] = {GL_ONE, GL_ONE, GL_ONE, GL_RED};
-    glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleRgbaParams);
+	#if FONS_OPTIONS_RGBA_COLORS
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gl->width, gl->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	#else
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, gl->width, gl->height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+		static GLint swizzleRgbaParams[4] = {GL_ONE, GL_ONE, GL_ONE, GL_RED};
+		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleRgbaParams);
+	#endif
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	return 1;
 }
@@ -102,7 +106,7 @@ static int glfons__renderResize(void* userPtr, int width, int height)
 	return glfons__renderCreate(userPtr, width, height);
 }
 
-static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* data)
+static void glfons__renderUpdate(void* userPtr, int* rect, const FONScolor* data)
 {
 	GLFONScontext* gl = (GLFONScontext*)userPtr;
 	int w = rect[2] - rect[0];
@@ -124,7 +128,11 @@ static void glfons__renderUpdate(void* userPtr, int* rect, const unsigned char* 
 	glPixelStorei(GL_UNPACK_SKIP_PIXELS, rect[0]);
 	glPixelStorei(GL_UNPACK_SKIP_ROWS, rect[1]);
 
-	glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_RED, GL_UNSIGNED_BYTE, data);
+	#if FONS_OPTIONS_RGBA_COLORS
+		glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	#else
+		glTexSubImage2D(GL_TEXTURE_2D, 0, rect[0], rect[1], w, h, GL_RED, GL_UNSIGNED_BYTE, data);
+	#endif
 
 	// Pop old values
 	glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
