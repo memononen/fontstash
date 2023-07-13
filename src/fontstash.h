@@ -856,7 +856,6 @@ static void fons__freeFont(FONSfont* font)
 {
 	if (font == NULL) return;
 	if (font->glyphs) free(font->glyphs);
-	if (font->data != NULL) free(font->data);
 	free(font);
 }
 
@@ -930,6 +929,7 @@ int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 
 		also, handing the file data to `stash` seems a bit silly
 		not sure why `stash` needs to hold onto the file data the whole time 
+		-> decided to free the font data early instead
 	*/
 
 	fp = fons__fopen(path, "rb");
@@ -970,9 +970,11 @@ int fonsAddFontMem(FONScontext* stash, const char* name, unsigned char* data, in
 	for (i = 0; i < FONS_HASH_LUT_SIZE; ++i)
 		font->lut[i] = -1;
 
+	/* free font data */
+	free(data);
+
 	// Read in the font data.
 	font->dataSize = dataSize;
-	font->data = data;
 	font->freeData = (unsigned char)freeData;
 
 	// Init font
@@ -1336,7 +1338,6 @@ FONS_DEF float fonsDrawText(FONScontext* stash,
 	if (stash == NULL) return x;
 	if (state->font < 0 || state->font >= stash->nfonts) return x;
 	font = stash->fonts[state->font];
-	if (font->data == NULL) return x;
 
 	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
 
@@ -1394,7 +1395,6 @@ FONS_DEF int fonsTextIterInit(FONScontext* stash, FONStextIter* iter,
 	if (stash == NULL) return 0;
 	if (state->font < 0 || state->font >= stash->nfonts) return 0;
 	iter->font = stash->fonts[state->font];
-	if (iter->font->data == NULL) return 0;
 
 	iter->isize = (short)(state->size*10.0f);
 	iter->iblur = (short)state->blur;
@@ -1521,7 +1521,6 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 	if (stash == NULL) return 0;
 	if (state->font < 0 || state->font >= stash->nfonts) return 0;
 	font = stash->fonts[state->font];
-	if (font->data == NULL) return 0;
 
 	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
 
@@ -1585,7 +1584,6 @@ FONS_DEF void fonsVertMetrics(FONScontext* stash,
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
 	isize = (short)(state->size*10.0f);
-	if (font->data == NULL) return;
 
 	if (ascender)
 		*ascender = font->ascender*isize/10.0f;
@@ -1605,7 +1603,6 @@ FONS_DEF void fonsLineBounds(FONScontext* stash, float y, float* miny, float* ma
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
 	isize = (short)(state->size*10.0f);
-	if (font->data == NULL) return;
 
 	y += fons__getVertAlign(stash, font, state->align, isize);
 
@@ -1695,7 +1692,7 @@ FONS_DEF int fonsExpandAtlas(FONScontext* stash, int width, int height)
 			return 0;
 	}
 	// Copy old texture data over.
-	unsigned char data[width * height];
+	unsigned char* data = (unsigned char*)malloc(width * height * sizeof(unsigned char));
 	if (data == NULL)
 		return 0;
 	for (i = 0; i < stash->params.height; i++) {
