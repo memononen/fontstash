@@ -996,6 +996,7 @@ int fonsGetFontByName(FONScontext* s, const char* name)
 		for (j = 0; name[j] != s->fonts[i]->name[j]; j++)
 			if (name[j] == '\0')
 				return i;
+
 	}
 	return FONS_INVALID;
 }
