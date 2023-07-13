@@ -856,6 +856,7 @@ static void fons__freeFont(FONSfont* font)
 {
 	if (font == NULL) return;
 	if (font->glyphs) free(font->glyphs);
+	if (font->data != NULL) free(font->data);
 	free(font);
 }
 
@@ -921,13 +922,23 @@ int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 	FILE* fp = 0;
 	int dataSize = 0, readed;
 	// Read in the font data.
+	
+	/* 
+		might be better to find some way to static allocate this 
+		maybe by using a standard base file size 
+		(eg. static unsigned char[STANDARD_TTF_SIZE];)
+
+		also, handing the file data to `stash` seems a bit silly
+		not sure why `stash` needs to hold onto the file data the whole time 
+	*/
+
 	fp = fons__fopen(path, "rb");
 	if (fp == NULL) return FONS_INVALID;
 	fseek(fp,0,SEEK_END);
 	dataSize = (int)ftell(fp);
 	fseek(fp,0,SEEK_SET);
 
-	unsigned char data[dataSize];
+	unsigned char* data = malloc(dataSize);
 	if (data == NULL) goto error;
 	readed = fread(data, 1, dataSize, fp);
 	fclose(fp);
