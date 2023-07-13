@@ -358,15 +358,8 @@ static unsigned int fons__hashint(unsigned int a)
 	return a;
 }
 
-static int fons__mini(int a, int b)
-{
-	return a < b ? a : b;
-}
-
-static int fons__maxi(int a, int b)
-{
-	return a > b ? a : b;
-}
+#define fons__mini(a, b) ((a < b) ? (a) : (b));
+#define fons__maxi(a, b) ((a > b) ? (a) : (b));
 
 struct FONSglyph
 {
@@ -437,7 +430,7 @@ struct FONScontext
 	float tcoords[FONS_VERTEX_COUNT*2];
 	unsigned int colors[FONS_VERTEX_COUNT];
 	int nverts;
-	unsigned char* scratch;
+	unsigned char scratch[FONS_SCRATCH_BUF_SIZE];
 	int nscratch;
 	FONSstate states[FONS_MAX_STATES];
 	int nstates;
@@ -455,9 +448,9 @@ static void* fons__tmpalloc(size_t size, void* up)
 	// 16-byte align the returned pointer
 	size = (size + 0xf) & ~0xf;
 
-	if (stash->nscratch+(int)size > FONS_SCRATCH_BUF_SIZE) {
+	if (stash->nscratch + (int)size > FONS_SCRATCH_BUF_SIZE) {
 		if (stash->handleError)
-			stash->handleError(stash->errorUptr, FONS_SCRATCH_FULL, stash->nscratch+(int)size);
+			stash->handleError(stash->errorUptr, FONS_SCRATCH_FULL, stash->nscratch + (int)size);
 		return NULL;
 	}
 	ptr = stash->scratch + stash->nscratch;
@@ -529,7 +522,7 @@ static FONSatlas* fons__allocAtlas(int w, int h, int nnodes)
 	// Allocate memory for the font stash.
 	atlas = (FONSatlas*)malloc(sizeof(FONSatlas));
 	if (atlas == NULL) goto error;
-	memset(atlas, 0, sizeof(FONSatlas));
+	//memset(atlas, 0, sizeof(FONSatlas));
 
 	atlas->width = w;
 	atlas->height = h;
@@ -537,7 +530,7 @@ static FONSatlas* fons__allocAtlas(int w, int h, int nnodes)
 	// Allocate space for skyline nodes
 	atlas->nodes = (FONSatlasNode*)malloc(sizeof(FONSatlasNode) * nnodes);
 	if (atlas->nodes == NULL) goto error;
-	memset(atlas->nodes, 0, sizeof(FONSatlasNode) * nnodes);
+	//memset(atlas->nodes, 0, sizeof(FONSatlasNode) * nnodes);
 	atlas->nnodes = 0;
 	atlas->cnodes = nnodes;
 
@@ -610,7 +603,7 @@ static int fons__atlasAddSkylineLevel(FONSatlas* atlas, int idx, int x, int y, i
 	int i;
 
 	// Insert new node
-	if (fons__atlasInsertNode(atlas, idx, x, y+h, w) == 0)
+	if (fons__atlasInsertNode(atlas, idx, x, y + h, w) == 0)
 		return 0;
 
 	// Delete skyline segments that fall under the shadow of the new segment.
@@ -718,18 +711,25 @@ static void fons__addWhiteRect(FONScontext* stash, int w, int h)
 
 FONScontext* fonsCreateInternal(FONSparams* params)
 {
-	FONScontext* stash = NULL;
-
+	FONScontext* stash;
+	
 	// Allocate memory for the font stash.
 	stash = (FONScontext*)malloc(sizeof(FONScontext));
-	if (stash == NULL) goto error;
-	memset(stash, 0, sizeof(FONScontext));
+	if (stash == NULL) return NULL;
+	
+	/* 
+		I don't think this is required 
+		so it'd probably be better not to have it
+
+		memset(stash, 0, sizeof(FONScontext));
+	*/
 
 	stash->params = *params;
 
-	// Allocate scratch buffer.
-	stash->scratch = (unsigned char*)malloc(FONS_SCRATCH_BUF_SIZE);
-	if (stash->scratch == NULL) goto error;
+	/* 
+		removed allocation of scratch buffer
+		since it's just a static size anyway
+	*/
 
 	// Initialize implementation library
 	if (!fons__tt_init(stash)) goto error;
@@ -745,7 +745,7 @@ FONScontext* fonsCreateInternal(FONSparams* params)
 	// Allocate space for fonts.
 	stash->fonts = (FONSfont**)malloc(sizeof(FONSfont*) * FONS_INIT_FONTS);
 	if (stash->fonts == NULL) goto error;
-	memset(stash->fonts, 0, sizeof(FONSfont*) * FONS_INIT_FONTS);
+	//memset(stash->fonts, 0, sizeof(FONSfont*) * FONS_INIT_FONTS);
 	stash->cfonts = FONS_INIT_FONTS;
 	stash->nfonts = 0;
 
@@ -754,7 +754,7 @@ FONScontext* fonsCreateInternal(FONSparams* params)
 	stash->ith = 1.0f/stash->params.height;
 	stash->texData = (unsigned char*)malloc(stash->params.width * stash->params.height);
 	if (stash->texData == NULL) goto error;
-	memset(stash->texData, 0, stash->params.width * stash->params.height);
+	//memset(stash->texData, 0, stash->params.width * stash->params.height);
 
 	stash->dirtyRect[0] = stash->params.width;
 	stash->dirtyRect[1] = stash->params.height;
@@ -856,7 +856,6 @@ static void fons__freeFont(FONSfont* font)
 {
 	if (font == NULL) return;
 	if (font->glyphs) free(font->glyphs);
-	if (font->freeData && font->data) free(font->data);
 	free(font);
 }
 
@@ -891,24 +890,25 @@ static FILE* fons__fopen(const char* filename, const char* mode)
 {
 #ifdef _WIN32
 	int len = 0;
-	int fileLen = strlen(filename);
-	int modeLen = strlen(mode);
+	
 	wchar_t wpath[MAX_PATH];
 	wchar_t wmode[MAX_PATH];
 	FILE* f;
 
-	if (fileLen == 0)
-		return NULL;
-	if (modeLen == 0)
-		return NULL;
-	len = MultiByteToWideChar(CP_UTF8, 0, filename, fileLen, wpath, fileLen);
-	if (len >= MAX_PATH)
+	/* 
+		based on `stb_image.h` 
+		the strlen isn't required
+	*/
+	
+	len = MultiByteToWideChar(CP_UTF8, 0, filename, fileLen, wpath, sizeof(wFilename)/sizeof(*wFilename));
+	if (len >= MAX_PATH || len == 0)
 		return NULL;
 	wpath[len] = L'\0';
-	len = MultiByteToWideChar(CP_UTF8, 0, mode, modeLen, wmode, modeLen);
-	if (len >= MAX_PATH)
+	len = MultiByteToWideChar(CP_UTF8, 0, mode, modeLen, wmode, sizeof(wMode)/sizeof(*wMode)));
+	if (len >= MAX_PATH || len == 0)
 		return NULL;
 	wmode[len] = L'\0';
+
 	f = _wfopen(wpath, wmode);
 	return f;
 #else
@@ -920,15 +920,25 @@ int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 {
 	FILE* fp = 0;
 	int dataSize = 0, readed;
-	unsigned char* data = NULL;
-
 	// Read in the font data.
+	
+	/* 
+		might be better to find some way to static allocate this 
+		maybe by using a standard base file size 
+		(eg. static unsigned char[STANDARD_TTF_SIZE];)
+
+		also, handing the file data to `stash` seems a bit silly
+		not sure why `stash` needs to hold onto the file data the whole time 
+		-> decided to free the font data early instead
+	*/
+
 	fp = fons__fopen(path, "rb");
-	if (fp == NULL) goto error;
+	if (fp == NULL) return FONS_INVALID;
 	fseek(fp,0,SEEK_END);
 	dataSize = (int)ftell(fp);
 	fseek(fp,0,SEEK_SET);
-	data = (unsigned char*)malloc(dataSize);
+
+	unsigned char* data = malloc(dataSize);
 	if (data == NULL) goto error;
 	readed = fread(data, 1, dataSize, fp);
 	fclose(fp);
@@ -938,7 +948,6 @@ int fonsAddFont(FONScontext* stash, const char* name, const char* path)
 	return fonsAddFontMem(stash, name, data, dataSize, 1);
 
 error:
-	if (data) free(data);
 	if (fp) fclose(fp);
 	return FONS_INVALID;
 }
@@ -961,9 +970,11 @@ int fonsAddFontMem(FONScontext* stash, const char* name, unsigned char* data, in
 	for (i = 0; i < FONS_HASH_LUT_SIZE; ++i)
 		font->lut[i] = -1;
 
+	/* free font data */
+	free(data);
+
 	// Read in the font data.
 	font->dataSize = dataSize;
-	font->data = data;
 	font->freeData = (unsigned char)freeData;
 
 	// Init font
@@ -988,10 +999,17 @@ error:
 
 int fonsGetFontByName(FONScontext* s, const char* name)
 {
-	int i;
+	int i, j;
 	for (i = 0; i < s->nfonts; i++) {
-		if (strcmp(s->fonts[i]->name, name) == 0)
-			return i;
+		/* 
+			this way is slightly faster than strcmp
+			because it'd end sooner if the strings are not equal
+		*/
+
+		for (j = 0; name[j] != s->fonts[i]->name[j]; j++)
+			if (name[j] == '\0')
+				return i;
+
 	}
 	return FONS_INVALID;
 }
@@ -1320,12 +1338,8 @@ FONS_DEF float fonsDrawText(FONScontext* stash,
 	if (stash == NULL) return x;
 	if (state->font < 0 || state->font >= stash->nfonts) return x;
 	font = stash->fonts[state->font];
-	if (font->data == NULL) return x;
 
 	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
-
-	if (end == NULL)
-		end = str + strlen(str);
 
 	// Align horizontally
 	if (state->align & FONS_ALIGN_LEFT) {
@@ -1340,7 +1354,12 @@ FONS_DEF float fonsDrawText(FONScontext* stash,
 	// Align vertically.
 	y += fons__getVertAlign(stash, font, state->align, isize);
 
-	for (; str != end; ++str) {
+	/* 
+		strlen is already doing a loop like this
+		so there's no point in doing it twice if end == NULL
+	*/
+
+	for (; (end != NULL && str != end) || (end == NULL && *str != '\0'); ++str) {
 		if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char*)str))
 			continue;
 		glyph = fons__getGlyph(stash, font, codepoint, isize, iblur);
@@ -1371,12 +1390,11 @@ FONS_DEF int fonsTextIterInit(FONScontext* stash, FONStextIter* iter,
 	FONSstate* state = fons__getState(stash);
 	float width;
 
-	memset(iter, 0, sizeof(*iter));
+	//memset(iter, 0, sizeof(*iter));
 
 	if (stash == NULL) return 0;
 	if (state->font < 0 || state->font >= stash->nfonts) return 0;
 	iter->font = stash->fonts[state->font];
-	if (iter->font->data == NULL) return 0;
 
 	iter->isize = (short)(state->size*10.0f);
 	iter->iblur = (short)state->blur;
@@ -1394,9 +1412,6 @@ FONS_DEF int fonsTextIterInit(FONScontext* stash, FONStextIter* iter,
 	}
 	// Align vertically.
 	y += fons__getVertAlign(stash, iter->font, state->align, iter->isize);
-
-	if (end == NULL)
-		end = str + strlen(str);
 
 	iter->x = iter->nextx = x;
 	iter->y = iter->nexty = y;
@@ -1506,7 +1521,6 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 	if (stash == NULL) return 0;
 	if (state->font < 0 || state->font >= stash->nfonts) return 0;
 	font = stash->fonts[state->font];
-	if (font->data == NULL) return 0;
 
 	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
 
@@ -1517,10 +1531,7 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 	miny = maxy = y;
 	startx = x;
 
-	if (end == NULL)
-		end = str + strlen(str);
-
-	for (; str != end; ++str) {
+	for (; (end && str != end) || (!end && *str != '\0'); ++str) {
 		if (fons__decutf8(&utf8state, &codepoint, *(const unsigned char*)str))
 			continue;
 		glyph = fons__getGlyph(stash, font, codepoint, isize, iblur);
@@ -1573,7 +1584,6 @@ FONS_DEF void fonsVertMetrics(FONScontext* stash,
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
 	isize = (short)(state->size*10.0f);
-	if (font->data == NULL) return;
 
 	if (ascender)
 		*ascender = font->ascender*isize/10.0f;
@@ -1593,7 +1603,6 @@ FONS_DEF void fonsLineBounds(FONScontext* stash, float y, float* miny, float* ma
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
 	isize = (short)(state->size*10.0f);
-	if (font->data == NULL) return;
 
 	y += fons__getVertAlign(stash, font, state->align, isize);
 
@@ -1646,7 +1655,6 @@ FONS_DEF void fonsDeleteInternal(FONScontext* stash)
 	if (stash->atlas) fons__deleteAtlas(stash->atlas);
 	if (stash->fonts) free(stash->fonts);
 	if (stash->texData) free(stash->texData);
-	if (stash->scratch) free(stash->scratch);
 	free(stash);
 }
 
@@ -1667,7 +1675,6 @@ FONS_DEF void fonsGetAtlasSize(FONScontext* stash, int* width, int* height)
 FONS_DEF int fonsExpandAtlas(FONScontext* stash, int width, int height)
 {
 	int i, maxy = 0;
-	unsigned char* data = NULL;
 	if (stash == NULL) return 0;
 
 	width = fons__maxi(width, stash->params.width);
@@ -1685,7 +1692,7 @@ FONS_DEF int fonsExpandAtlas(FONScontext* stash, int width, int height)
 			return 0;
 	}
 	// Copy old texture data over.
-	data = (unsigned char*)malloc(width * height);
+	unsigned char* data = (unsigned char*)malloc(width * height * sizeof(unsigned char));
 	if (data == NULL)
 		return 0;
 	for (i = 0; i < stash->params.height; i++) {
@@ -1740,7 +1747,7 @@ FONS_DEF int fonsResetAtlas(FONScontext* stash, int width, int height)
 	// Clear texture data.
 	stash->texData = (unsigned char*)realloc(stash->texData, width * height);
 	if (stash->texData == NULL) return 0;
-	memset(stash->texData, 0, width * height);
+	//memset(stash->texData, 0, width * height);
 
 	// Reset dirty rect
 	stash->dirtyRect[0] = width;
